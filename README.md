@@ -4,7 +4,7 @@ Página de produto para Coenzima Q10 Nutrify (SKU 1001726), com kits de 1, 2 ou 
 
 O projeto está diretamente na raiz do repositório. `package.json`, `package-lock.json`, `next.config.mjs`, `app/` e `public/` ficam juntos; não há uma pasta `site/` para selecionar na hospedagem.
 
-O código de pagamento ainda usa Stripe. A integração com InfinitePay está pendente; mantenha `CHECKOUT_ENABLED=false` até concluir e validar a troca.
+O pagamento usa o Checkout Integrado da InfinitePay. O servidor gera o link para o kit escolhido e confirma pagamentos pela API, tanto no retorno do comprador quanto pelo webhook. Veja [configuração e operação](docs/infinitepay.md).
 
 ## Organização
 
@@ -54,27 +54,30 @@ Em desenvolvimento, copie .env.example para .env.local. Na Hostinger, configure 
 
 | Variável | Uso |
 |---|---|
-| STRIPE_SECRET_KEY | Chave secreta Stripe; comece com uma chave de teste. |
-| CHECKOUT_ENABLED | true permite checkout quando chave, origem e prazo são válidos. Padrão: false. |
+| INFINITEPAY_HANDLE | Sua InfiniteTag pública, sem `$`. Conta configurada: `mateus-diniz-5eo`. |
+| COMMERCE_DATA_DIR | Caminho absoluto de uma pasta privada e persistente fora da aplicação publicada. Guarda `orders.sqlite`; necessário para habilitar compras. |
+| CHECKOUT_ENABLED | true permite checkout quando conta, armazenamento, origem e prazo são válidos. Padrão: false. |
 | SITE_URL | Origem HTTPS exata do domínio, sem caminho, query ou fragmento. |
 | SITE_INDEXABLE | true permite indexação. Configure antes do build de lançamento; refaça o build se mudar. Padrão: false. |
 | DELIVERY_MAX_DAYS | 10, conforme informado. O código também usa 10 quando vazio. |
 | DELIVERY_MIN_DAYS | Vazio: não foi informado um prazo mínimo. |
 | STORE_COMPANY_NAME, STORE_CNPJ, STORE_ADDRESS, STORE_EMAIL, STORE_PHONE | Campos para informações comerciais reais quando fornecidas. Nenhum dado foi inventado. |
 
-Sem configuração válida, seleção e revisão funcionam e o pagamento fica indisponível, com aviso claro. GET /api/store expõe somente configuração pública, sem chave Stripe.
+Sem configuração válida, seleção e revisão funcionam e o pagamento fica indisponível, com aviso claro. GET /api/store expõe somente configuração pública, sem credenciais, identificadores da conta ou caminhos privados.
 
-## Stripe e entrega
+## InfinitePay e entrega
 
-POST /api/checkout cria uma sessão de Stripe Checkout hospedada. O servidor define os preços: 1 frasco por R$ 69,90; 2 por R$ 99,90; 3 por R$ 149,90. Frete grátis, compra única, sem assinatura. O checkout coleta endereço brasileiro, e-mail e telefone. A idempotência reutiliza a mesma sessão em tentativas do mesmo pedido. Pix e parcelamento dependem da configuração e elegibilidade da conta Stripe; não são prometidos.
+POST /api/checkout envia o pedido à API documentada da InfinitePay e retorna o link de pagamento. O servidor define os totais: 1 frasco por R$ 69,90; 2 por R$ 99,90; 3 por R$ 149,90. Cada kit é um único item com o preço do kit, sem taxa de frete ou assinatura. A quantidade de frascos aparece na descrição. As formas de pagamento e eventuais taxas de parcelamento seguem a configuração da conta InfinitePay.
 
-`SITE_URL` define o domínio público usado na validação da origem e nos retornos do pagamento, mesmo quando o proxy da hospedagem passa um endereço interno ao Next.js. O acesso HTTP por loopback para testes locais é aceito somente com `NODE_ENV=development`, definido pelo comando `npm run dev`.
+`SITE_URL` define o domínio público para validar a origem e receber o retorno do pagamento, mesmo quando o proxy passa um endereço interno ao Next.js. O acesso HTTP por loopback para testes locais é permitido somente com `NODE_ENV=development` e host/porta correspondentes.
 
-GET /api/order-status consulta a Stripe para confirmar o pagamento. Um parâmetro de retorno na URL não prova uma venda. A resposta não contém nome, endereço, e-mail ou dados de cartão. Os testes usam respostas simuladas; nenhuma transação real ou sessão real de teste foi executada sem credenciais.
+O pedido é registrado em SQLite antes da geração do link. Repetições do mesmo pedido reutilizam o link salvo; uma reserva impede chamadas simultâneas por diferentes workers. A documentação não promete idempotência da API da InfinitePay: se uma chamada perder a resposta, uma tentativa após o intervalo de recuperação pode gerar outro link para o mesmo identificador local. A confirmação aceita uma única transação por pedido e uma transação não pode confirmar dois pedidos.
 
-Antes de vender, teste os três kits e retornos de sucesso, cancelamento e pagamento pendente no modo de teste da Stripe. Depois, configure a chave de produção e o domínio. Não envie chaves pelo chat.
+GET /api/order-status confirma o retorno por POST /payment_check na InfinitePay. POST /api/webhooks/infinitepay recebe notificações e faz a mesma verificação. Parâmetros da URL e corpo do webhook não são provas de pagamento. O valor original deve corresponder ao pedido salvo; taxas adicionais de parcelamento são registradas separadamente. Eventos repetidos já confirmados são reconhecidos sem duplicar o pedido. Falhas recebem HTTP 400 para a InfinitePay tentar novamente. A preferência de resposta em menos de um segundo depende da latência da API na primeira confirmação.
 
-O painel Stripe é a fonte de pedidos pagos e contatos/endereço. Confirme o pagamento antes de enviar. Consulte metadata.bundle_id e metadata.bottle_quantity: o kit é um item; a quantidade de frascos está no nome, descrição e metadados. Confirmação, postagem e rastreio são enviados manualmente pela operação. Não há mensagens automáticas ou webhook de fulfillment.
+O banco precisa ficar em armazenamento persistente privado, fora de public_html e das pastas de build/release. A aplicação exige diretório com permissão 0700 e guarda apenas referências, kit, valores e confirmação; não guarda cartão, CPF, telefone ou endereço. Faça backup consistente de SQLite incluindo WAL, por ferramenta própria ou com o servidor parado, e teste restauração. O painel InfinitePay fornece os contatos/endereço para a operação. Confirmação de envio e rastreio continuam manuais.
+
+A API pública documentada usa a InfiniteTag. Uma chamada real de geração de link para a conta foi validada sem API Key, sem pagar. A chave enviada na conversa não foi usada, gravada nem incluída no repositório; não há cabeçalho de autenticação inventado. Se a InfinitePay exigir futuramente outro modo autenticado, siga a documentação oficial correspondente antes de mudar esse fluxo. Não presuma que exista sandbox: os testes automatizados simulam o provedor.
 
 ## Interface para pessoas 60+
 

@@ -1,12 +1,14 @@
+import { OrderStore, validDataDir, type Order } from "./orders.ts";
+import { paymentUrl } from "./payment-url.ts";
 import {
   deliveryMaxBusinessDays,
   findBundle,
-  product,
   type StoreConfig,
 } from "../catalog.ts";
 export type CommerceEnv = Partial<
   Record<
-    | "STRIPE_SECRET_KEY"
+    | "INFINITEPAY_HANDLE"
+    | "COMMERCE_DATA_DIR"
     | "CHECKOUT_ENABLED"
     | "SITE_URL"
     | "NODE_ENV"
@@ -78,7 +80,8 @@ export function storeConfig(env: CommerceEnv): StoreConfig {
   // Technical availability is distinct from the merchant's launch obligations.
   config.checkoutReady =
     env.CHECKOUT_ENABLED === "true" &&
-    /^(sk|rk)_(test|live)_[A-Za-z0-9]+$/.test(env.STRIPE_SECRET_KEY || "") &&
+    /^[A-Za-z][A-Za-z0-9_-]{0,23}$/.test(env.INFINITEPAY_HANDLE || "") &&
+    validDataDir(env.COMMERCE_DATA_DIR, env.NODE_ENV === "production") &&
     originValid &&
     deliveryValid;
   return config;
@@ -120,213 +123,160 @@ function checkoutOrigin(request: Request, env: CommerceEnv) {
     return null;
   }
 }
-export function checkoutParams(
-  bundleId: unknown,
-  origin: string,
-  reference: string,
-  store: StoreConfig,
-) {
+
+const api = "https://api.checkout.infinitepay.io";
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const orderId = /^BDH-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const invoiceId = /^[A-Za-z0-9_-]{1,200}$/;
+export type CommerceDeps = { fetch?: typeof fetch; orders?: OrderStore };
+function openOrders(env: CommerceEnv, deps: CommerceDeps) {
+  return deps.orders || new OrderStore(env.COMMERCE_DATA_DIR || "", env.NODE_ENV === "production");
+}
+async function readJson(request: Request, limit: number): Promise<Record<string, unknown>> {
+  if (!request.headers.get("Content-Type")?.toLowerCase().startsWith("application/json"))
+    throw new Error("Invalid content type");
+  const reader = request.body?.getReader();
+  if (!reader) throw new Error("Missing body");
+  let size = 0;
+  const chunks: Uint8Array[] = [];
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > limit) { await reader.cancel(); throw new Error("Body too large"); }
+      chunks.push(value);
+    }
+  } finally { reader.releaseLock(); }
+  const payload: unknown = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error("Invalid body");
+  return payload as Record<string, unknown>;
+}
+export function checkoutParams(bundleId: unknown, origin: string, nsu: string, env: CommerceEnv) {
   const bundle = findBundle(bundleId);
   if (!bundle) throw new Error("Invalid bundle");
-  const params = new URLSearchParams({
-    mode: "payment",
-    locale: "pt-BR",
-    customer_creation: "if_required",
-    client_reference_id: reference,
-    success_url:
-      origin + "/?checkout=complete&session_id={CHECKOUT_SESSION_ID}",
-    cancel_url: origin + "/?checkout=cancelled&kit=" + bundle.id + "#kits",
-    "line_items[0][quantity]": "1",
-    "line_items[0][price_data][currency]": "brl",
-    "line_items[0][price_data][unit_amount]": String(bundle.priceCents),
-    "line_items[0][price_data][product_data][name]":
-      "Coenzima Q10 Nutrify — " + bundle.label,
-    "line_items[0][price_data][product_data][description]":
-      bundle.quantity +
-      " frasco(s), 60 cápsulas por frasco. Frete grátis. Compra única.",
-    "line_items[0][price_data][product_data][images][0]":
-      origin + product.image,
-    "shipping_address_collection[allowed_countries][0]": "BR",
-    "phone_number_collection[enabled]": "true",
-    "shipping_options[0][shipping_rate_data][type]": "fixed_amount",
-    "shipping_options[0][shipping_rate_data][fixed_amount][amount]": "0",
-    "shipping_options[0][shipping_rate_data][fixed_amount][currency]": "brl",
-    "shipping_options[0][shipping_rate_data][display_name]": "Frete grátis",
-    "shipping_options[0][shipping_rate_data][delivery_estimate][maximum][unit]":
-      "business_day",
-    "shipping_options[0][shipping_rate_data][delivery_estimate][maximum][value]":
-      String(store.deliveryMaxDays),
-    "metadata[store]": "bem-de-hoje",
-    "metadata[bundle_id]": bundle.id,
-    "metadata[bottle_quantity]": String(bundle.quantity),
-    "metadata[order_reference]": reference,
-    "payment_intent_data[metadata][store]": "bem-de-hoje",
-    "payment_intent_data[metadata][bundle_id]": bundle.id,
-    "payment_intent_data[metadata][order_reference]": reference,
-  });
-  if (store.deliveryMinDays !== null) {
-    params.set(
-      "shipping_options[0][shipping_rate_data][delivery_estimate][minimum][unit]",
-      "business_day",
-    );
-    params.set(
-      "shipping_options[0][shipping_rate_data][delivery_estimate][minimum][value]",
-      String(store.deliveryMinDays),
-    );
-  }
-  return params;
+  return {
+    handle: env.INFINITEPAY_HANDLE,
+    order_nsu: nsu,
+    redirect_url: origin + "/?checkout=complete",
+    webhook_url: trustedOrigin(env) + "/api/webhooks/infinitepay",
+    // One kit is one item: using bottle quantity here would multiply the kit price.
+    items: [{ quantity: 1, price: bundle.priceCents,
+      description: "Coenzima Q10 Nutrify — " + bundle.label +
+        ", 60 cápsulas por frasco. Frete grátis. Compra única." }],
+  };
 }
-export async function handleCheckout(
-  request: Request,
-  env: CommerceEnv,
-  stripeFetch: typeof fetch = fetch,
-) {
+export async function handleCheckout(request: Request, env: CommerceEnv, deps: CommerceDeps = {}) {
   let origin: string | null;
-  try {
-    origin = checkoutOrigin(request, env);
-  } catch {
-    return response({ error: "A loja ainda está em preparação." }, 503);
-  }
-  if (!origin)
-    return response({ error: "Abra o pagamento pela página da loja." }, 403);
-  if (!request.headers.get("Content-Type")?.startsWith("application/json"))
+  try { origin = checkoutOrigin(request, env); }
+  catch { return response({ error: "A loja ainda está em preparação." }, 503); }
+  if (!origin) return response({ error: "Abra o pagamento pela página da loja." }, 403);
+  if (!request.headers.get("Content-Type")?.toLowerCase().startsWith("application/json"))
     return response({ error: "Formato de pedido inválido." }, 415);
-  let payload: unknown;
-  try {
-    const body = await request.text();
-    if (body.length > 2048) return response({ error: "Pedido inválido." }, 400);
-    payload = JSON.parse(body);
-  } catch {
-    return response({ error: "Pedido inválido." }, 400);
-  }
-  if (!payload || typeof payload !== "object" || Array.isArray(payload))
-    return response({ error: "Pedido inválido." }, 400);
-  const values = payload as Record<string, unknown>;
-  if (
-    Object.keys(values).length !== 2 ||
-    !findBundle(values.bundleId) ||
-    typeof values.requestId !== "string" ||
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-      values.requestId,
-    )
-  )
+  let values: Record<string, unknown>;
+  try { values = await readJson(request, 2048); }
+  catch { return response({ error: "Pedido inválido." }, 400); }
+  const bundle = findBundle(values.bundleId);
+  if (Object.keys(values).length !== 2 || !bundle || typeof values.requestId !== "string" ||
+      !uuid.test(values.requestId))
     return response({ error: "Escolha um kit válido e tente novamente." }, 400);
-  const store = storeConfig(env);
-  if (!store.checkoutReady)
-    return response(
-      {
-        error:
-          "A loja está em preparação. O pagamento ainda não está disponível.",
-      },
-      503,
-    );
+  if (!storeConfig(env).checkoutReady)
+    return response({ error: "A loja está em preparação. O pagamento ainda não está disponível." }, 503);
+  let orders: OrderStore;
+  try { orders = openOrders(env, deps); }
+  catch { return response({ error: "Não foi possível preparar o pedido. Tente novamente em instantes." }, 503); }
   try {
-    const reference = "BDH-" + values.requestId.slice(0, 8).toUpperCase();
-    const stripeResponse = await stripeFetch(
-      "https://api.stripe.com/v1/checkout/sessions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: "Bearer " + env.STRIPE_SECRET_KEY,
-          "Content-Type": "application/x-www-form-urlencoded",
-          "Idempotency-Key": "bdh-" + values.requestId + "-" + values.bundleId,
-        },
-        body: checkoutParams(values.bundleId, origin, reference, store),
-        signal: AbortSignal.timeout(18000),
-      },
-    );
-    if (!stripeResponse.ok)
-      return response(
-        {
-          error:
-            "Não foi possível abrir o pagamento. Tente novamente em instantes.",
-        },
-        502,
-      );
-    const session = (await stripeResponse.json()) as { url?: string };
-    const url = new URL(session.url || "");
-    if (url.protocol !== "https:" || url.hostname !== "checkout.stripe.com")
-      throw new Error("Invalid Checkout URL");
-    return response({ url: url.href });
-  } catch {
-    return response(
-      {
-        error:
-          "Não foi possível abrir o pagamento. Seu pedido não foi cobrado nesta página. Tente novamente.",
-      },
-      502,
-    );
-  }
-}
-export async function handleOrderStatus(
-  request: Request,
-  env: CommerceEnv,
-  stripeFetch: typeof fetch = fetch,
-) {
-  const sessionId = new URL(request.url).searchParams.get("session_id");
-  if (!sessionId || !/^cs_(test_|live_)?[a-zA-Z0-9]{20,220}$/.test(sessionId))
-    return response({ error: "Não foi possível identificar o pedido." }, 400);
-  if (!env.STRIPE_SECRET_KEY)
-    return response(
-      { error: "A confirmação do pagamento está indisponível." },
-      503,
-    );
-  try {
-    const result = await stripeFetch(
-      "https://api.stripe.com/v1/checkout/sessions/" +
-        encodeURIComponent(sessionId),
-      {
-        headers: { Authorization: "Bearer " + env.STRIPE_SECRET_KEY },
-        signal: AbortSignal.timeout(12000),
-      },
-    );
-    if (!result.ok)
-      return response(
-        {
-          error:
-            "Não foi possível consultar este pedido. Procure o atendimento.",
-        },
-        404,
-      );
-    const session = (await result.json()) as {
-      payment_status: string;
-      status: string;
-      mode: string;
-      currency: string;
-      amount_total: number;
-      metadata: Record<string, string>;
-    };
-    const bundle = findBundle(session.metadata?.bundle_id);
-    if (
-      session.metadata?.store !== "bem-de-hoje" ||
-      !bundle ||
-      session.mode !== "payment" ||
-      session.currency !== "brl" ||
-      session.amount_total !== bundle.priceCents
-    )
-      return response(
-        { error: "Não foi possível confirmar este pedido." },
-        404,
-      );
-    return response({
-      status:
-        session.payment_status === "paid"
-          ? "paid"
-          : session.status === "expired"
-            ? "expired"
-            : "pending",
-      orderReference: /^BDH-[A-F0-9]{8}$/.test(
-        session.metadata.order_reference || "",
-      )
-        ? session.metadata.order_reference
-        : "",
-      quantity: bundle.quantity,
-      totalCents: bundle.priceCents,
+    const { order, claimed } = orders.reserve(values.requestId + ":" + bundle.id, bundle, env.INFINITEPAY_HANDLE!);
+    if (order.state === "paid") return response({ error: "Este pedido já foi pago. Atualize a página para iniciar outra compra." }, 409);
+    if (order.checkout_url) {
+      const url = paymentUrl(order.checkout_url);
+      if (!url) throw new Error("Invalid saved URL");
+      return response({ url, orderReference: order.nsu });
+    }
+    if (!claimed) return response({ error: "Seu pagamento está sendo preparado. Aguarde alguns instantes e tente novamente." }, 409);
+    const result = await (deps.fetch || fetch)(api + "/links", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(checkoutParams(bundle.id, origin, order.nsu, env)),
+      signal: AbortSignal.timeout(15000), redirect: "error",
     });
+    if (!result.ok) {
+      orders.release(order.nsu);
+      throw new Error("Provider unavailable");
+    }
+    const data = await result.json() as { url?: unknown };
+    const url = paymentUrl(data.url);
+    if (!url || new URL(url).pathname !== "/" + order.handle) throw new Error("Invalid payment URL");
+    orders.saveCheckout(order.nsu, url);
+    return response({ url, orderReference: order.nsu });
   } catch {
-    return response(
-      { error: "A consulta está indisponível no momento. Tente novamente." },
-      502,
-    );
+    // A timeout can leave a provider invoice open. Keep the reservation for 60s.
+    return response({ error: "Não foi possível abrir o pagamento. Nenhuma cobrança é feita nesta página. Aguarde um minuto e tente novamente." }, 502);
+  } finally { if (!deps.orders) orders.close(); }
+}
+function publicOrder(order: Order) {
+  return { status: order.state, orderReference: order.nsu,
+    quantity: order.quantity, totalCents: order.amount };
+}
+async function verifyPayment(order: Order, transaction: string, slug: string, orders: OrderStore, deps: CommerceDeps) {
+  if (order.state === "paid") {
+    if (order.transaction_nsu !== transaction || order.invoice_slug !== slug) throw new Error("Conflicting transaction");
+    return order;
   }
+  const result = await (deps.fetch || fetch)(api + "/payment_check", {
+    method: "POST", headers: { "Content-Type": "application/json" }, redirect: "error",
+    body: JSON.stringify({ handle: order.handle, order_nsu: order.nsu, transaction_nsu: transaction, slug }),
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!result.ok) throw new Error("Payment verification unavailable");
+  const data = await result.json() as Record<string, unknown>;
+  if (data.success !== true || typeof data.paid !== "boolean") throw new Error("Invalid payment status");
+  if (!data.paid) return order;
+  if (data.amount !== order.amount || !Number.isSafeInteger(data.paid_amount) ||
+      (data.paid_amount as number) < order.amount ||
+      !["credit_card", "pix"].includes(data.capture_method as string)) throw new Error("Payment mismatch");
+  return orders.confirm(order.nsu, { transaction, slug,
+    paidAmount: data.paid_amount as number, method: data.capture_method as string });
+}
+export async function handleOrderStatus(request: Request, env: CommerceEnv, deps: CommerceDeps = {}) {
+  const params = new URL(request.url).searchParams;
+  const nsu = params.get("order_nsu") || "";
+  const transaction = params.get("transaction_nsu");
+  const slug = params.get("slug");
+  if (!orderId.test(nsu) || (transaction !== null && !uuid.test(transaction)) ||
+      (slug !== null && !invoiceId.test(slug)) || Boolean(transaction) !== Boolean(slug))
+    return response({ error: "Não foi possível identificar o pedido." }, 400);
+  let orders: OrderStore;
+  try { orders = openOrders(env, deps); }
+  catch { return response({ error: "A confirmação do pagamento está indisponível." }, 503); }
+  try {
+    const order = orders.get(nsu);
+    if (!order) return response({ error: "Não foi possível identificar o pedido." }, 404);
+    if (order.state === "paid" || !transaction || !slug) return response(publicOrder(order));
+    return response(publicOrder(await verifyPayment(order, transaction, slug, orders, deps)));
+  } catch { return response({ error: "A consulta está indisponível no momento. Tente novamente ou procure o atendimento." }, 502); }
+  finally { if (!deps.orders) orders.close(); }
+}
+export async function handleWebhook(request: Request, env: CommerceEnv, deps: CommerceDeps = {}) {
+  let payload: Record<string, unknown>;
+  const fail = (message: string) => response({ success: false, message }, 400);
+  try { payload = await readJson(request, 16384); }
+  catch { return fail("Notificação inválida"); }
+  const { order_nsu: nsu, transaction_nsu: transaction, invoice_slug: slug } = payload;
+  if (typeof nsu !== "string" || !orderId.test(nsu) || typeof transaction !== "string" ||
+      !uuid.test(transaction) || typeof slug !== "string" || !invoiceId.test(slug))
+    return fail("Notificação inválida");
+  let orders: OrderStore;
+  try { orders = openOrders(env, deps); }
+  catch { return fail("Confirmação temporariamente indisponível"); }
+  try {
+    const order = orders.get(nsu);
+    if (!order) return fail("Pedido não encontrado");
+    if (payload.amount !== order.amount) return fail("Valor do pedido inválido");
+    // No webhook signature is specified in the provider documentation.
+    // Never trust the notification itself: confirm the real payment with the API.
+    const verified = await verifyPayment(order, transaction, slug, orders, deps);
+    if (verified.state !== "paid") return fail("Pagamento ainda não confirmado");
+    return response({ success: true, message: null });
+  } catch { return fail("Não foi possível confirmar o pagamento"); }
+  finally { if (!deps.orders) orders.close(); }
 }

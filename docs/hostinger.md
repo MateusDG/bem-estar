@@ -66,19 +66,24 @@ HOSTNAME=0.0.0.0
 
 Substitua SITE_URL pelo domínio HTTPS real, sem caminho. O site permitirá escolher/revisar kits, com pagamento indisponível. Configure credenciais diretamente no hPanel; .env.example é somente uma referência.
 
-## Stripe e lançamento
+## InfinitePay e lançamento
 
-O backend atual ainda é Stripe. **InfinitePay não foi integrada nesta reorganização.** Se a operação usar InfinitePay, conclua a substituição do checkout e da confirmação do pagamento antes de habilitar vendas. As instruções abaixo descrevem o backend existente.
+O checkout e a confirmação foram migrados para InfinitePay. Siga [o guia de integração](infinitepay.md). Configure no hPanel:
 
-Configure uma chave Stripe de teste e CHECKOUT_ENABLED=true no ambiente de homologação. Reinicie/republique após alterar variáveis. Confira:
+```dotenv
+INFINITEPAY_HANDLE=mateus-diniz-5eo
+COMMERCE_DATA_DIR=/home/u211581624/domains/bemnasaude.com.br/.commerce
+SITE_URL=https://bemnasaude.com.br
+CHECKOUT_ENABLED=true
+```
 
-- Os três totais: R$ 69,90, R$ 99,90 e R$ 149,90, com frete grátis.
-- Endereço brasileiro, contato e quantidade de frascos no checkout.
-- Entrega em até 10 dias úteis, sem prazo mínimo inventado.
-- Retornos aprovado, pendente e cancelado; confirme o resultado no painel Stripe.
-- Consulta do pedido sem exposição de dados pessoais ou chave Stripe.
+O caminho acima usa o usuário/domínio mostrados no log da sua hospedagem. Confirme que ele é persistente e gravável pelo processo Node.js. A aplicação cria a pasta privada e o banco automaticamente; não use `public_html`, `.next`, pasta de release, `/tmp` em produção ou o diretório do repositório. Se já criou essa pasta, deixe permissão 0700. Não mude esse caminho nem remova o banco em uma republicação. O servidor desabilita compras se a configuração ou o armazenamento falhar.
 
-Após testar, configure a chave de produção no hPanel. Defina SITE_INDEXABLE=true **antes do build de lançamento** e gere novo build. O domínio em SITE_URL deve ser o mesmo acessado pelo cliente, incluindo a escolha de usar ou não www.
+Faça commit das alterações e reimplante pela integração Git. O webhook só existirá no domínio após a nova publicação. Cada link criado pelo site já envia a URL `https://bemnasaude.com.br/api/webhooks/infinitepay`; não é necessário criar links manualmente nem usar o webhook como endereço de pagamento do cliente.
+
+Confira os três kits, o contato/endereço no checkout e o retorno. A compra só fica confirmada após verificação da API. Os testes automatizados usam respostas simuladas; um pagamento real e a chegada do webhook na Hostinger ainda precisam ser verificados na operação antes de iniciar tráfego pago.
+
+Para indexação, defina SITE_INDEXABLE=true antes do build de lançamento. O domínio em SITE_URL deve ser o mesmo acessado pelo cliente, incluindo a escolha de usar ou não www. A geração de links foi confirmada pela API pública documentada usando a InfiniteTag; a chave privada da conversa não foi colocada no código.
 
 ## Conferência após publicar
 

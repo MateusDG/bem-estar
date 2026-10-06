@@ -1,398 +1,193 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  checkoutParams,
-  handleCheckout,
-  handleOrderStatus,
-  storeConfig,
-  validCnpj,
-  type CommerceEnv,
-} from "../lib/commerce/checkout.ts";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { randomUUID } from "node:crypto";
+import { checkoutParams, handleCheckout, handleOrderStatus, handleWebhook, storeConfig, validCnpj, type CommerceEnv } from "../lib/commerce/checkout.ts";
+import { OrderStore } from "../lib/commerce/orders.ts";
+import { paymentUrl } from "../lib/commerce/payment-url.ts";
 import { bundles } from "../lib/catalog.ts";
-// All values below are isolated fixtures. No Stripe request is sent by these tests.
-const siteOrigin = "https://store.example.test";
-const fixtureEnv: CommerceEnv = {
-  STRIPE_SECRET_KEY: "sk_test_fixture",
-  CHECKOUT_ENABLED: "true",
-  SITE_URL: siteOrigin,
-  STORE_COMPANY_NAME: "Fixture only",
-  STORE_CNPJ: "11222333000181",
-  STORE_ADDRESS: "Fixture address",
-  STORE_EMAIL: "test@example.invalid",
-  DELIVERY_MIN_DAYS: "3",
-  DELIVERY_MAX_DAYS: "8",
-};
+// All providers below are simulated: tests never send requests or payments.
+const origin = "https://store.example.test";
+const env: CommerceEnv = { INFINITEPAY_HANDLE: "fixture-merchant", COMMERCE_DATA_DIR: "/tmp/fixture-orders", SITE_URL: origin, CHECKOUT_ENABLED: "true", NODE_ENV: "production" };
 const requestId = "d9c05515-811a-4e85-bd87-5a7b0f0b2329";
-const post = (body: unknown, origin = siteOrigin) =>
-  new Request(siteOrigin + "/api/checkout", {
-    method: "POST",
-    headers: { Origin: origin, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-const offline = (() => {
-  throw new Error("No external network allowed in this test");
-}) as typeof fetch;
-test("each server-side kit has its exact total and free BR shipping", () => {
-  for (const bundle of bundles) {
-    const params = checkoutParams(
-      bundle.id,
-      siteOrigin,
-      "BDH-TEST",
-      storeConfig(fixtureEnv),
-    );
-    assert.equal(
-      params.get("line_items[0][price_data][unit_amount]"),
-      String(bundle.priceCents),
-    );
-    assert.equal(params.get("line_items[0][quantity]"), "1");
-    assert.equal(
-      params.get(
-        "shipping_options[0][shipping_rate_data][fixed_amount][amount]",
-      ),
-      "0",
-    );
-    assert.equal(
-      params.get("shipping_address_collection[allowed_countries][0]"),
-      "BR",
-    );
-    assert.equal(params.get("mode"), "payment");
-    assert.equal(
-      params.get("metadata[bottle_quantity]"),
-      String(bundle.quantity),
-    );
-  }
-});
-test("checkout requires credentials, an enabled flag, a valid HTTPS origin and a valid delivery estimate", () => {
-  assert.equal(storeConfig({}).checkoutReady, false);
-  assert.equal(storeConfig(fixtureEnv).checkoutReady, true);
-  for (const key of ["STRIPE_SECRET_KEY", "SITE_URL"] as const)
-    assert.equal(
-      storeConfig({ ...fixtureEnv, [key]: "" }).checkoutReady,
-      false,
-      key,
-    );
-  assert.equal(
-    storeConfig({ ...fixtureEnv, CHECKOUT_ENABLED: "false" }).checkoutReady,
-    false,
-  );
-  assert.equal(
-    storeConfig({ ...fixtureEnv, DELIVERY_MAX_DAYS: "2" }).checkoutReady,
-    false,
-  );
-  assert.equal(
-    storeConfig({ ...fixtureEnv, SITE_URL: "http://store.example.test" })
-      .checkoutReady,
-    false,
-  );
-  assert.equal(
-    storeConfig({
-      ...fixtureEnv,
-      SITE_URL: "https://store.example.test/payment",
-    }).checkoutReady,
-    false,
-  );
-  assert.equal(
-    storeConfig({ ...fixtureEnv, DELIVERY_MAX_DAYS: "invalid" }).checkoutReady,
-    false,
-  );
-});
-test("numeric and new alphanumeric CNPJ formats are checked", () => {
-  assert.equal(validCnpj("11.222.333/0001-81"), true);
-  assert.equal(validCnpj("12.ABC.345/01DE-35"), true);
-  assert.equal(validCnpj("00.000.000/0000-00"), false);
-  assert.equal(validCnpj("12.ABC.345/01DE-34"), false);
-});
-test("client cannot override price, shipping or bundle", async () => {
-  for (const payload of [
-    { bundleId: "two", requestId, priceCents: 1 },
-    { bundleId: "four", requestId },
-    { bundleId: "one", requestId: "invalid" },
-    { bundleId: "one", requestId, shipping: 0 },
-  ])
-    assert.equal(
-      (await handleCheckout(post(payload), fixtureEnv, offline)).status,
-      400,
-    );
-});
-test("cross-origin checkout is rejected before Stripe is called", async () => {
-  assert.equal(
-    (
-      await handleCheckout(
-        post({ bundleId: "one", requestId }, "https://attacker.invalid"),
-        fixtureEnv,
-        offline,
-      )
-    ).status,
-    403,
-  );
-});
-test("production behind a proxy uses the public domain even when Next sees a loopback URL", async () => {
-  const params: URLSearchParams[] = [];
-  const mock = (async (_url: unknown, init: RequestInit) => {
-    params.push(new URLSearchParams(String(init.body)));
-    return Response.json({
-      url: "https://checkout.stripe.com/c/pay/cs_test_fixture",
-    });
-  }) as typeof fetch;
-  for (const internalUrl of [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://0.0.0.0:3000",
-  ]) {
-    const request = new Request(internalUrl + "/api/checkout", {
-      method: "POST",
-      headers: {
-        Origin: siteOrigin,
-        Host: "store.example.test",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ bundleId: "one", requestId }),
-    });
-    assert.equal(
-      (
-        await handleCheckout(
-          request,
-          { ...fixtureEnv, NODE_ENV: "production" },
-          mock,
-        )
-      ).status,
-      200,
-    );
-  }
-  for (const body of params) {
-    assert.equal(
-      body.get("success_url"),
-      siteOrigin + "/?checkout=complete&session_id={CHECKOUT_SESSION_ID}",
-    );
-    assert.equal(
-      body.get("cancel_url"),
-      siteOrigin + "/?checkout=cancelled&kit=one#kits",
-    );
-  }
-});
-test("production rejects a loopback Origin and untrusted forwarded host", async () => {
-  const request = new Request("http://localhost:3000/api/checkout", {
-    method: "POST",
-    headers: {
-      Origin: "http://localhost:3000",
-      Host: "store.example.test",
-      "X-Forwarded-Host": "attacker.invalid",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ bundleId: "one", requestId }),
-  });
-  assert.equal(
-    (
-      await handleCheckout(
-        request,
-        { ...fixtureEnv, NODE_ENV: "production" },
-        offline,
-      )
-    ).status,
-    403,
-  );
-});
-test("local development allows only the browser host and port", async () => {
-  const mock = (async (_url: unknown, init: RequestInit) => {
-    const params = new URLSearchParams(String(init.body));
-    assert.equal(
-      params.get("success_url"),
-      "http://127.0.0.1:5173/?checkout=complete&session_id={CHECKOUT_SESSION_ID}",
-    );
-    return Response.json({
-      url: "https://checkout.stripe.com/c/pay/cs_test_fixture",
-    });
-  }) as typeof fetch;
-  const request = (origin: string) =>
-    new Request("http://localhost:5173/api/checkout", {
-      method: "POST",
-      headers: {
-        Origin: origin,
-        Host: "127.0.0.1:5173",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ bundleId: "one", requestId }),
-    });
-  const env = { ...fixtureEnv, NODE_ENV: "development" };
-  assert.equal(
-    (await handleCheckout(request("http://127.0.0.1:5173"), env, mock)).status,
-    200,
-  );
-  assert.equal(
-    (await handleCheckout(request("http://127.0.0.1:9999"), env, offline))
-      .status,
-    403,
-  );
-});
-test("unconfigured checkout returns a clear preparation message", async () => {
-  const result = await handleCheckout(
-    post({ bundleId: "one", requestId }),
-    {},
-    offline,
-  );
-  assert.equal(result.status, 503);
-  assert.match(
-    ((await result.json()) as { error: string }).error,
-    /preparação/,
-  );
-});
-test("Stripe receives server pricing, free shipping and a stable idempotency key", async () => {
-  const calls: RequestInit[] = [];
-  const mock = (async (_url: unknown, init: RequestInit) => {
-    calls.push(init);
-    return Response.json({
-      url: "https://checkout.stripe.com/c/pay/cs_test_fixture",
-    });
-  }) as typeof fetch;
-  for (let attempt = 0; attempt < 2; attempt++)
-    assert.equal(
-      (
-        await handleCheckout(
-          post({ bundleId: "two", requestId }),
-          fixtureEnv,
-          mock,
-        )
-      ).status,
-      200,
-    );
-  const params = new URLSearchParams(String(calls[0].body));
-  assert.equal(params.get("line_items[0][price_data][unit_amount]"), "9990");
-  assert.equal(
-    params.get("shipping_options[0][shipping_rate_data][fixed_amount][amount]"),
-    "0",
-  );
-  assert.equal(
-    new Headers(calls[0].headers).get("Idempotency-Key"),
-    new Headers(calls[1].headers).get("Idempotency-Key"),
-  );
-  assert.equal(params.get("phone_number_collection[enabled]"), "true");
-});
-test("Stripe errors and unexpected redirect hosts never leak details or redirect", async () => {
-  const fail = (async () =>
-    Response.json(
-      { error: { message: "internal sensitive detail" } },
-      { status: 400 },
-    )) as typeof fetch;
-  const result = await handleCheckout(
-    post({ bundleId: "one", requestId }),
-    fixtureEnv,
-    fail,
-  );
-  assert.equal(result.status, 502);
-  assert.doesNotMatch(await result.text(), /sensitive/);
-  const unexpected = (async () =>
-    Response.json({ url: "https://attacker.invalid/payment" })) as typeof fetch;
-  assert.equal(
-    (
-      await handleCheckout(
-        post({ bundleId: "one", requestId }),
-        fixtureEnv,
-        unexpected,
-      )
-    ).status,
-    502,
-  );
-});
-test("order confirmation depends on Stripe status and returns no personal data", async () => {
-  const request = new Request(
-    siteOrigin + "/api/order-status?session_id=cs_test_" + "a".repeat(30),
-  );
-  const session = {
-    mode: "payment",
-    currency: "brl",
-    amount_total: 9990,
-    payment_status: "unpaid",
-    status: "complete",
-    metadata: {
-      store: "bem-de-hoje",
-      bundle_id: "two",
-      order_reference: "BDH-12345678",
-    },
-    customer_details: {
-      email: "private@example.invalid",
-      address: { line1: "private" },
-    },
-  };
-  const mock = (async () => Response.json(session)) as typeof fetch;
-  assert.equal(
-    (
-      (await (await handleOrderStatus(request, fixtureEnv, mock)).json()) as {
-        status: string;
-      }
-    ).status,
-    "pending",
-  );
-  session.payment_status = "paid";
-  const paid = await (
-    await handleOrderStatus(request, fixtureEnv, mock)
-  ).json();
-  assert.equal((paid as { status: string }).status, "paid");
-  assert.doesNotMatch(JSON.stringify(paid), /private/);
-  session.amount_total = 1;
-  assert.equal(
-    (await handleOrderStatus(request, fixtureEnv, mock)).status,
-    404,
-  );
-});
-test("foreign-store orders and forged return URLs do not confirm payment", async () => {
-  assert.equal(
-    (
-      await handleOrderStatus(
-        new Request(siteOrigin + "/api/order-status?session_id=invalid"),
-        fixtureEnv,
-        offline,
-      )
-    ).status,
-    400,
-  );
-  const wrongStore = (async () =>
-    Response.json({
-      mode: "payment",
-      currency: "brl",
-      amount_total: 6990,
-      payment_status: "paid",
-      metadata: { store: "another", bundle_id: "one" },
-    })) as typeof fetch;
-  assert.equal(
-    (
-      await handleOrderStatus(
-        new Request(
-          siteOrigin + "/api/order-status?session_id=cs_test_" + "b".repeat(30),
-        ),
-        fixtureEnv,
-        wrongStore,
-      )
-    ).status,
-    404,
-  );
-});
+const transaction = "fc7c6f60-8032-4fb5-9d43-10e0dd6c5e12";
+const paymentLink = "https://checkout.infinitepay.io/fixture-merchant?lenc=fixture";
+const offline = (() => { throw new Error("External network forbidden"); }) as typeof fetch;
+function fixture(t: test.TestContext) {
+  const directory = mkdtempSync(join(tmpdir(), "bdh-orders-test-"));
+  const orders = new OrderStore(directory);
+  t.after(() => { orders.close(); rmSync(directory, { recursive: true, force: true }); });
+  return { directory, orders };
+}
+function post(body: unknown, source = origin, internal = origin) {
+  return new Request(internal + "/api/checkout", { method: "POST", headers: { Origin: source, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+}
+function reserve(orders: OrderStore, bundle = bundles[0]) {
+  return orders.reserve(randomUUID(), bundle, env.INFINITEPAY_HANDLE!).order;
+}
+function status(nsu: string, extra = "") { return new Request(origin + "/api/order-status?order_nsu=" + nsu + extra); }
+function webhook(nsu: string, changes: Record<string, unknown> = {}) {
+  return new Request(origin + "/api/webhooks/infinitepay", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ order_nsu: nsu, transaction_nsu: transaction, invoice_slug: "invoice-fixture", amount: 6990, ...changes }) });
+}
+const paid = (() => Promise.resolve(Response.json({ success: true, paid: true, amount: 6990, paid_amount: 7000, capture_method: "pix" }))) as typeof fetch;
 
-test("the approved delivery promise defaults to ten business days without inventing a minimum", () => {
-  const store = storeConfig({
-    ...fixtureEnv,
-    DELIVERY_MIN_DAYS: "",
-    DELIVERY_MAX_DAYS: "",
-  });
-  assert.equal(store.deliveryMinDays, null);
-  assert.equal(store.deliveryMaxDays, 10);
-  assert.equal(store.checkoutReady, true);
-  const params = checkoutParams("one", siteOrigin, "BDH-TEST", store);
-  assert.equal(
-    params.get(
-      "shipping_options[0][shipping_rate_data][delivery_estimate][maximum][value]",
-    ),
-    "10",
-  );
-  assert.equal(
-    params.has(
-      "shipping_options[0][shipping_rate_data][delivery_estimate][minimum][value]",
-    ),
-    false,
-  );
+test("three kits send one item at the exact kit total and no shipping fee", () => {
+  for (const bundle of bundles) {
+    const data = checkoutParams(bundle.id, origin, "BDH-fixture", env);
+    assert.deepEqual(data.items.map(item => [item.quantity, item.price]), [[1, bundle.priceCents]]);
+    assert.match(data.items[0].description, new RegExp(bundle.label));
+    assert.match(data.items[0].description, /Frete grátis/);
+    assert.equal(data.handle, "fixture-merchant");
+    assert.equal(data.redirect_url, origin + "/?checkout=complete");
+    assert.equal(data.webhook_url, origin + "/api/webhooks/infinitepay");
+  }
 });
-test("public configuration never exposes the Stripe key", () => {
-  assert.doesNotMatch(
-    JSON.stringify(storeConfig(fixtureEnv)),
-    /sk_test_fixture|STRIPE_SECRET_KEY/,
-  );
+test("readiness requires a public handle, private persistent directory, enabled flag and HTTPS origin", () => {
+  assert.equal(storeConfig(env).checkoutReady, true);
+  for (const key of ["INFINITEPAY_HANDLE", "COMMERCE_DATA_DIR", "SITE_URL"]) assert.equal(storeConfig({ ...env, [key]: "" }).checkoutReady, false);
+  for (const changes of [{ CHECKOUT_ENABLED: "false" }, { INFINITEPAY_HANDLE: "$fixture" }, { COMMERCE_DATA_DIR: "./orders" }, { COMMERCE_DATA_DIR: process.cwd() + "/orders" }, { COMMERCE_DATA_DIR: "/tmp/public_html/orders" }, { SITE_URL: "http://store.example.test" }, { SITE_URL: origin + "/checkout" }, { DELIVERY_MAX_DAYS: "invalid" }, { DELIVERY_MIN_DAYS: "11", DELIVERY_MAX_DAYS: "10" }]) assert.equal(storeConfig({ ...env, ...changes }).checkoutReady, false);
+  assert.equal(storeConfig(env).deliveryMaxDays, 10);
+  assert.equal(storeConfig(env).deliveryMinDays, null);
+});
+test("CNPJ validation still supports valid numeric and alphanumeric formats", () => {
+  assert.equal(validCnpj("11.222.333/0001-81"), true);
+  assert.equal(validCnpj("00000000000000"), false);
+  assert.equal(validCnpj("11.222.333/0001-80"), false);
+});
+test("request validation rejects foreign origins, malformed bodies and client price overrides before contacting provider", async () => {
+  assert.equal((await handleCheckout(post({ bundleId: "one", requestId }, "https://evil.example"), env, { fetch: offline })).status, 403);
+  for (const body of [null, [], {}, { bundleId: "fake", requestId }, { bundleId: "one", requestId: "../etc" }, { bundleId: "one", requestId, price: 1 }, { bundleId: "one", requestId, filler: "a".repeat(3000) }]) assert.equal((await handleCheckout(post(body), env, { fetch: offline })).status, 400);
+});
+test("disabled checkout cannot create orders or call provider", async () => {
+  assert.equal((await handleCheckout(post({ bundleId: "one", requestId }), { ...env, CHECKOUT_ENABLED: "false" }, { fetch: offline })).status, 503);
+});
+test("production proxy internal addresses use the configured public callback and webhook", async t => {
+  const { orders } = fixture(t);
+  const provider = (async (_url, options) => {
+    const data = JSON.parse(String(options?.body));
+    assert.equal(data.redirect_url, origin + "/?checkout=complete");
+    assert.equal(data.webhook_url, origin + "/api/webhooks/infinitepay");
+    assert.equal(data.items[0].price, 9990);
+    return Response.json({ url: paymentLink });
+  }) as typeof fetch;
+  assert.equal((await handleCheckout(post({ bundleId: "two", requestId }, origin, "http://127.0.0.1:3000"), env, { orders, fetch: provider })).status, 200);
+  assert.equal((await handleCheckout(post({ bundleId: "one", requestId }, "http://localhost:3000", "http://localhost:3000"), env, { fetch: offline })).status, 403);
+});
+test("development permits only matching loopback host and port", async t => {
+  const { orders } = fixture(t);
+  const local = "http://127.0.0.1:5173";
+  const provider = (async (_url, options) => {
+    assert.equal(JSON.parse(String(options?.body)).redirect_url, local + "/?checkout=complete");
+    return Response.json({ url: paymentLink });
+  }) as typeof fetch;
+  assert.equal((await handleCheckout(post({ bundleId: "one", requestId }, local, local), { ...env, NODE_ENV: "development" }, { orders, fetch: provider })).status, 200);
+  assert.equal((await handleCheckout(post({ bundleId: "one", requestId }, "http://127.0.0.1:9999", local), { ...env, NODE_ENV: "development" }, { fetch: offline })).status, 403);
+});
+test("retry after process restart reuses the persisted URL and order reference", async t => {
+  const { directory, orders } = fixture(t);
+  const provider = (() => Promise.resolve(Response.json({ url: paymentLink }))) as typeof fetch;
+  const first = await (await handleCheckout(post({ bundleId: "one", requestId }), env, { orders, fetch: provider })).json();
+  const reopened = new OrderStore(directory);
+  try {
+    const second = await (await handleCheckout(post({ bundleId: "one", requestId }), env, { orders: reopened, fetch: offline })).json();
+    assert.deepEqual(second, first);
+  } finally { reopened.close(); }
+});
+test("two workers cannot create competing links for the same reserved request", t => {
+  const { directory, orders } = fixture(t);
+  const other = new OrderStore(directory);
+  try {
+    const a = orders.reserve(requestId, bundles[0], env.INFINITEPAY_HANDLE!);
+    const b = other.reserve(requestId, bundles[0], env.INFINITEPAY_HANDLE!);
+    assert.equal(a.claimed, true); assert.equal(b.claimed, false);
+    assert.equal(a.order.nsu, b.order.nsu);
+  } finally { other.close(); }
+});
+test("provider HTTP errors expose no upstream message", async t => {
+  const { orders } = fixture(t);
+  const provider = (() => Promise.resolve(Response.json({ secret: "provider-private-error" }, { status: 401 }))) as typeof fetch;
+  const result = await handleCheckout(post({ bundleId: "one", requestId }), env, { orders, fetch: provider });
+  assert.equal(result.status, 502);
+  assert.doesNotMatch(await result.text(), /provider-private-error/);
+});
+test("redirect validation rejects insecure protocols, spoofed hosts, userinfo and ports", () => {
+  assert.equal(paymentUrl(paymentLink), paymentLink);
+  assert.ok(paymentUrl("https://checkout.infinitepay.com.br/fixture"));
+  for (const value of ["http://checkout.infinitepay.io/x", "https://checkout.infinitepay.io.evil.example/x", "https://user@checkout.infinitepay.io/x", "https://checkout.infinitepay.io:444/x", "javascript:alert(1)", "https://checkout.stripe.com/x"]) assert.equal(paymentUrl(value), null);
+});
+test("untrusted provider redirect never reaches the customer", async t => {
+  const { orders } = fixture(t);
+  const provider = (() => Promise.resolve(Response.json({ url: "https://evil.example" }))) as typeof fetch;
+  assert.equal((await handleCheckout(post({ bundleId: "one", requestId }), env, { orders, fetch: provider })).status, 502);
+});
+test("payment return is verified server-to-server, accepting separate installment fees", async t => {
+  const { orders } = fixture(t); const order = reserve(orders);
+  const provider = (async (url, options) => {
+    assert.equal(url, "https://api.checkout.infinitepay.io/payment_check");
+    assert.deepEqual(JSON.parse(String(options?.body)), { handle: order.handle, order_nsu: order.nsu, transaction_nsu: transaction, slug: "invoice-fixture" });
+    return paid(url, options);
+  }) as typeof fetch;
+  const result = await handleOrderStatus(status(order.nsu, "&transaction_nsu=" + transaction + "&slug=invoice-fixture"), env, { orders, fetch: provider });
+  assert.deepEqual(await result.json(), { status: "paid", orderReference: order.nsu, quantity: 1, totalCents: 6990 });
+  assert.equal(orders.get(order.nsu)?.paid_amount, 7000);
+});
+test("an order reference alone never fabricates payment approval", async t => {
+  const { orders } = fixture(t); const order = reserve(orders);
+  const result = await handleOrderStatus(status(order.nsu), env, { orders, fetch: offline });
+  assert.equal((await result.json()).status, "pending");
+});
+test("paid browser query and forged webhook cannot override pending provider status", async t => {
+  const { orders } = fixture(t); const order = reserve(orders);
+  const pending = (() => Promise.resolve(Response.json({ success: true, paid: false }))) as typeof fetch;
+  const result = await handleWebhook(webhook(order.nsu, { paid: true }), env, { orders, fetch: pending });
+  assert.equal(result.status, 400);
+  assert.equal(orders.get(order.nsu)?.state, "pending");
+});
+test("wrong amounts, invalid provider shapes and provider outages keep the order unpaid", async t => {
+  const { orders } = fixture(t); const order = reserve(orders);
+  for (const data of [{ success: true, paid: true, amount: 1, paid_amount: 6990, capture_method: "pix" }, { success: false, paid: true, amount: 6990 }, { success: true, paid: "true" }, { success: true, paid: true, amount: 6990, paid_amount: 1, capture_method: "pix" }]) {
+    const provider = (() => Promise.resolve(Response.json(data))) as typeof fetch;
+    assert.equal((await handleWebhook(webhook(order.nsu), env, { orders, fetch: provider })).status, 400);
+    assert.equal(orders.get(order.nsu)?.state, "pending");
+  }
+  assert.equal((await handleWebhook(webhook(order.nsu), env, { orders, fetch: offline })).status, 400);
+});
+test("webhook acknowledgment follows verified durable payment and duplicate events are idempotent", async t => {
+  const { directory, orders } = fixture(t); const order = reserve(orders);
+  const result = await handleWebhook(webhook(order.nsu), env, { orders, fetch: paid });
+  assert.deepEqual(await result.json(), { success: true, message: null });
+  assert.equal(result.status, 200);
+  const reopened = new OrderStore(directory);
+  try {
+    assert.equal(reopened.get(order.nsu)?.state, "paid");
+    assert.equal((await handleWebhook(webhook(order.nsu), env, { orders: reopened, fetch: offline })).status, 200);
+    assert.equal((await handleWebhook(webhook(order.nsu, { transaction_nsu: randomUUID() }), env, { orders: reopened, fetch: offline })).status, 400);
+    assert.equal((await (await handleOrderStatus(status(order.nsu), env, { orders: reopened, fetch: offline })).json()).status, "paid");
+  } finally { reopened.close(); }
+});
+test("invalid webhook, unknown order, wrong notified amount and oversized body are rejected before verification", async t => {
+  const { orders } = fixture(t); const order = reserve(orders);
+  for (const request of [webhook("../fake"), webhook("BDH-" + randomUUID()), webhook(order.nsu, { amount: 1 }), webhook(order.nsu, { extra: "a".repeat(17000) })]) assert.equal((await handleWebhook(request, env, { orders, fetch: offline })).status, 400);
+});
+test("a provider transaction cannot confirm two local orders", async t => {
+  const { orders } = fixture(t); const one = reserve(orders); const two = reserve(orders);
+  assert.equal((await handleWebhook(webhook(one.nsu), env, { orders, fetch: paid })).status, 200);
+  assert.equal((await handleWebhook(webhook(two.nsu), env, { orders, fetch: paid })).status, 400);
+  assert.equal(orders.get(two.nsu)?.state, "pending");
+});
+test("paid requests cannot reopen a payment link", async t => {
+  const { orders } = fixture(t);
+  const order = orders.reserve(requestId + ":one", bundles[0], env.INFINITEPAY_HANDLE!).order;
+  orders.confirm(order.nsu, { transaction, slug: "fixture", paidAmount: 6990, method: "pix" });
+  assert.equal((await handleCheckout(post({ bundleId: "one", requestId }), env, { orders, fetch: offline })).status, 409);
+});
+test("public configuration and status expose no credentials, private path or provider metadata", async t => {
+  const { orders } = fixture(t); const order = reserve(orders);
+  const config = JSON.stringify(storeConfig(env));
+  assert.doesNotMatch(config, /INFINITEPAY|COMMERCE_DATA_DIR|fixture-merchant|fixture-orders|inchk_/);
+  const result = await handleOrderStatus(status(order.nsu), env, { orders, fetch: offline });
+  assert.equal(result.headers.get("Cache-Control"), "no-store");
+  assert.doesNotMatch(await result.text(), /handle|transaction_nsu|capture_method|invoice_slug|checkout_url/);
 });

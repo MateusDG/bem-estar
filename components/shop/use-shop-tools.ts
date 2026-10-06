@@ -101,7 +101,7 @@ export function useShopTools(
       name: "bdh_review_order",
       title: "Revisar pedido",
       description:
-        "Open the order review after a kit is selected; otherwise focus the kit choices. Does not open Stripe or complete a purchase.",
+        "Open the order review after a kit is selected; otherwise focus the kit choices. Does not open InfinitePay or complete a purchase.",
       inputSchema: {
         type: "object",
         properties: {},

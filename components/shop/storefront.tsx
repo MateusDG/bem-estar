@@ -29,6 +29,7 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import ProductDetails from "./product-details";
 import PaymentStatus from "./payment-status";
+import { paymentUrl } from "@/lib/commerce/payment-url";
 import { useShopTools } from "./use-shop-tools";
 import {
   bundles,
@@ -201,10 +202,13 @@ export default function Storefront() {
           result.error ||
             "Não foi possível abrir o pagamento. Tente novamente.",
         );
-      const url = new URL(result.url);
-      if (url.protocol !== "https:" || url.hostname !== "checkout.stripe.com")
+      const url = paymentUrl(result.url);
+      if (!url)
         throw new Error("O endereço de pagamento não pôde ser confirmado.");
-      if (!controller.signal.aborted) location.assign(url.href);
+      if (!controller.signal.aborted) {
+        try { sessionStorage.removeItem("bem-de-hoje-payment"); } catch {}
+        location.assign(url);
+      }
     } catch (cause) {
       if (timedOut)
         setError(
@@ -382,7 +386,7 @@ export default function Storefront() {
           <div>
             <LockKeyhole aria-hidden="true" />
             <span>
-              <strong>Pagamento pela Stripe</strong>
+              <strong>Pagamento pela InfinitePay</strong>
               <small>Seus dados protegidos no checkout</small>
             </span>
           </div>
@@ -667,7 +671,7 @@ export default function Storefront() {
               </p>
               <p className="checkout-explainer">
                 <LockKeyhole size={20} aria-hidden="true" /> No próximo passo, a
-                Stripe pede seu contato, endereço de entrega e forma de
+                InfinitePay pede seu contato, endereço de entrega e forma de
                 pagamento.
               </p>
               {!store.checkoutReady && (
@@ -780,18 +784,18 @@ export default function Storefront() {
               </p>
               <p>
                 Quando o pagamento estiver disponível, os dados de contato,
-                endereço e pagamento serão solicitados no checkout da Stripe. A
+                endereço e pagamento serão solicitados no checkout da InfinitePay. A
                 loja utiliza contato e endereço para processar seu pedido e
                 enviar atualizações da entrega.
               </p>
               <p>
-                Os dados de cartão são tratados pela Stripe. Consulte a{" "}
+                Os dados de cartão são tratados pela InfinitePay. Consulte a{" "}
                 <a
-                  href="https://stripe.com/br/privacy"
+                  href="https://www.infinitepay.io/legal/aviso-de-privacidade"
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  política de privacidade da Stripe
+                  política de privacidade da InfinitePay
                 </a>
                 .
               </p>

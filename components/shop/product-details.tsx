@@ -214,7 +214,7 @@ export default function ProductDetails({
             <div>
               <h3>Escolha, confira e pague.</h3>
               <p>
-                Selecione seu kit e revise o total. No checkout da Stripe,
+                Selecione seu kit e revise o total. No checkout da InfinitePay,
                 informe seu contato e o endereço completo da entrega. Não é
                 preciso criar uma conta na nossa loja.
               </p>
@@ -307,7 +307,7 @@ export default function ProductDetails({
               <AccordionTrigger>Como funciona o pagamento?</AccordionTrigger>
               <AccordionContent>
                 Depois de revisar seu pedido, você segue para uma página segura
-                da Stripe. Lá você informa seu contato e endereço e escolhe
+                da InfinitePay. Lá você informa seu contato e endereço e escolhe
                 entre as formas de pagamento disponíveis. A compra é única, sem
                 assinatura.
                 {!store.checkoutReady && (

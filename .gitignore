@@ -20,6 +20,11 @@ out/
 coverage/
 *.tsbuildinfo
 next-env.d.ts
+.commerce/
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
 
 # Secrets; keep empty configuration examples in version control
 .env

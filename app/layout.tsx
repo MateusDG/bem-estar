@@ -4,8 +4,9 @@ const indexable = process.env.SITE_INDEXABLE === "true";
 export const metadata: Metadata = {
   title: "Bem de Hoje | Coenzima Q10 Nutrify",
   description:
-    "Conheça a Coenzima Q10 Nutrify. Escolha seu kit com informações claras, frete grátis e pagamento pela Stripe.",
+    "Conheça a Coenzima Q10 Nutrify. Escolha seu kit com informações claras, frete grátis e pagamento pela InfinitePay.",
   robots: { index: indexable, follow: indexable },
+  referrer: "no-referrer",
   icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
 };
 export default function RootLayout({
