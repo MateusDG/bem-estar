@@ -1,52 +1,78 @@
 # Bem de Hoje
 
-Página de produto em português para Coenzima Q10 Nutrify (SKU 1001726). Marca provisória sugerida; registro de marca, domínio e autorização de uso comercial das imagens do fabricante ainda precisam ser confirmados pelo responsável pela loja.
+Página de produto para Coenzima Q10 Nutrify (SKU 1001726), com kits de 1, 2 ou 3 frascos. Aplicação Next.js / React em servidor Node.js. Prazo informado: **entrega em até 10 dias úteis após a confirmação do pagamento**, sem prazo mínimo prometido.
 
 ## Rodar e verificar
 
+Requer Node.js 22.13 ou superior; selecione Node.js 22 na Hostinger. Execute na pasta deste package.json:
+
 ```sh
-npm install
-npm run dev -- --host 127.0.0.1
-npx tsc --noEmit
-node --experimental-strip-types --test scripts/commerce.test.ts
-npm run build
+npm ci
+npm run dev
 ```
 
-Projeto Vinext / React / Cloudflare Workers. O desenvolvimento local usa `.dev.vars`; há um modelo sem segredos em `.dev.vars.example`. O projeto publicado usa variáveis de ambiente do Sites, não o arquivo local. Não coloque credenciais em componentes, Git ou chat.
+Abra http://127.0.0.1:5173. Para verificar e executar a versão de produção:
 
-## Stripe preparada, vendas desativadas
+```sh
+npm run lint
+npx tsc --noEmit
+npm run test:commerce
+npm run build
+npm start
+```
 
-`POST /api/checkout` cria uma sessão de Stripe Checkout hospedada. O servidor define o kit e o valor: 1 frasco 6990 centavos, 2 frascos 9990, 3 frascos 14990. O checkout coleta endereço brasileiro, email e telefone. Frete zero, compra única, sem assinatura. A chave de idempotência mantém tentativas do mesmo pedido na mesma sessão. As formas de pagamento vêm da configuração e elegibilidade da conta Stripe; Pix ou parcelamento não foram prometidos.
+O build gera .next/standalone/server.js e copia public/ e .next/static/ para a aplicação de produção. O servidor usa PORT e HOSTNAME fornecidos pela hospedagem; localmente a porta padrão é 3000. Não execute dev em produção.
 
-`GET /api/order-status` consulta a Stripe para confirmar o pagamento. Um parâmetro de retorno na URL não prova uma venda. A resposta não contém nome, endereço, email nem dados de cartão. Os testes usam respostas simuladas; nenhuma cobrança real ou sessão real de teste foi executada, pois não há uma chave Stripe configurada.
+## Publicar na Hostinger
 
-Para ativar, configure no ambiente de execução:
+Leia [o guia de publicação](docs/hostinger.md). É necessário um ambiente de **aplicação Node.js**: enviar código por FTP para public_html não executa as APIs de pagamento. O pacote contém código-fonte; dependências e build devem ser gerados no servidor Linux da Hostinger.
+
+O servidor público Next.js não exige login do ChatGPT. Os comandos legados de Sites/Vinext foram preservados para referência (dev:sites e build:sites); não fazem parte da publicação na Hostinger.
+
+## Configuração
+
+Em desenvolvimento, copie .env.example para .env.local. Na Hostinger, configure as variáveis no hPanel. Não inclua segredos em arquivos públicos, Git, chat ou NEXT_PUBLIC_*.
 
 | Variável | Uso |
 |---|---|
-| `STRIPE_SECRET_KEY` | Segredo da conta Stripe. Começar com uma chave de teste. |
-| `CHECKOUT_ENABLED` | `true` habilita somente depois de todos os campos necessários serem válidos. |
-| `SITE_URL` | Origem HTTPS exata, sem caminho. Atualizar se usar domínio próprio. |
-| `STORE_COMPANY_NAME` | Razão social real. |
-| `STORE_CNPJ` | CNPJ real, numérico ou alfanumérico com dígitos verificadores válidos. |
-| `STORE_ADDRESS` | Endereço completo real do vendedor. |
-| `STORE_EMAIL` | Canal real de atendimento, privacidade e devolução. |
-| `STORE_PHONE` | Telefone público opcional, com DDI/DDD. |
-| `DELIVERY_MIN_DAYS` / `DELIVERY_MAX_DAYS` | Prazo real de entrega em dias úteis, mínimo 1 e máximo 120. Não há prazo inventado. |
+| STRIPE_SECRET_KEY | Chave secreta Stripe; comece com uma chave de teste. |
+| CHECKOUT_ENABLED | true permite checkout quando chave, origem e prazo são válidos. Padrão: false. |
+| SITE_URL | Origem HTTPS exata do domínio, sem caminho, query ou fragmento. |
+| SITE_INDEXABLE | true permite indexação. Configure antes do build de lançamento; refaça o build se mudar. Padrão: false. |
+| DELIVERY_MAX_DAYS | 10, conforme informado. O código também usa 10 quando vazio. |
+| DELIVERY_MIN_DAYS | Vazio: não foi informado um prazo mínimo. |
+| STORE_COMPANY_NAME, STORE_CNPJ, STORE_ADDRESS, STORE_EMAIL, STORE_PHONE | Campos para informações comerciais reais quando fornecidas. Nenhum dado foi inventado. |
 
-Sem credenciais e dados operacionais, o visitante pode escolher e revisar o kit; a página informa que as vendas estão em preparação e não inicia cobrança. Antes do tráfego pago, completar os dados, revisar as políticas com a operação real, testar os três kits no modo de teste da Stripe e configurar domínio/audiência públicos. O site foi criado com acesso privado para revisão.
+Sem configuração válida, seleção e revisão funcionam e o pagamento fica indisponível, com aviso claro. GET /api/store expõe somente configuração pública, sem chave Stripe.
 
-## Operação manual de entrega
+## Stripe e entrega
 
-O painel da Stripe é a fonte dos pedidos pagos e dos contatos/endereço fornecidos. Verifique pagamento confirmado no painel; não prepare envio com base apenas em uma captura da página de sucesso. Leia `metadata.bundle_id` e `metadata.bottle_quantity`: o checkout vende um kit como um item; a quantidade de frascos está no nome/descrição e nos metadados. Envie a confirmação, preparação, postagem e rastreio manualmente pelo contato informado. Não foi criado um sistema fictício de rastreio, nem envio automático de mensagens. Não há webhook de fulfillment porque a operação solicitada é manual; eventual automação futura precisa de webhook assinado e armazenamento persistente.
+POST /api/checkout cria uma sessão de Stripe Checkout hospedada. O servidor define os preços: 1 frasco por R$ 69,90; 2 por R$ 99,90; 3 por R$ 149,90. Frete grátis, compra única, sem assinatura. O checkout coleta endereço brasileiro, e-mail e telefone. A idempotência reutiliza a mesma sessão em tentativas do mesmo pedido. Pix e parcelamento dependem da configuração e elegibilidade da conta Stripe; não são prometidos.
 
-## Interface
+GET /api/order-status consulta a Stripe para confirmar o pagamento. Um parâmetro de retorno na URL não prova uma venda. A resposta não contém nome, endereço, e-mail ou dados de cartão. Os testes usam respostas simuladas; nenhuma transação real ou sessão real de teste foi executada sem credenciais.
 
-- Seleção de kits com preços e total imediatos, revisão acessível antes do checkout.
-- Texto base 18 px, preferências de leitura 100–150%, contraste adicional, zoom do navegador preservado, foco visível e navegação por teclado.
-- Foto real do produto, embalagem ampliável, composição em abas, FAQ em acordeão e etapas de entrega navegáveis.
-- Respeito à preferência por movimento reduzido. Nenhum vídeo automático, contador, estoque fictício ou depoimento inventado.
-- Nenhum Meta Pixel, analytics publicitário ou coleta de email na landing page ativo. Antes de medir anúncios, definir a política de consentimento e a integração com Meta; não registrar eventos Purchase sem pagamento confirmado.
-- `bdh_select_bundle`, `bdh_get_order_summary`, `bdh_review_order` usam o mesmo estado da interface. As ferramentas nunca compram nem abrem pagamento automaticamente.
+Antes de vender, teste os três kits e retornos de sucesso, cancelamento e pagamento pendente no modo de teste da Stripe. Depois, configure a chave de produção e o domínio. Não envie chaves pelo chat.
 
-Fontes e critérios da pesquisa estão em `docs/pesquisa-e-conteudo.md`. Proveniência visual em `docs/imagens.md`.
+O painel Stripe é a fonte de pedidos pagos e contatos/endereço. Confirme o pagamento antes de enviar. Consulte metadata.bundle_id e metadata.bottle_quantity: o kit é um item; a quantidade de frascos está no nome, descrição e metadados. Confirmação, postagem e rastreio são enviados manualmente pela operação. Não há mensagens automáticas ou webhook de fulfillment.
+
+## Interface para pessoas 60+
+
+- Texto base e controles principais de 18 px; auxiliares de pelo menos 16,2 px, relativos à preferência do navegador.
+- Leitura de 100% a 200%, preferências preservadas, contraste adicional e respeito a movimento reduzido.
+- Produto, quantidade, preço e ação antes da imagem no celular.
+- Nenhum kit pré-selecionado; revisão mostra total, frete e prazo.
+- Toque de pelo menos 44 px, foco visível, teclado e retorno de foco ao fechar diálogos.
+- Tabela com cabeçalhos identificados e revisão sem rolagem horizontal em tela estreita com texto ampliado.
+- Sem vídeo automático, contador, estoque fictício, depoimento inventado ou assinatura escondida.
+
+Não há Meta Pixel ou analytics publicitário ativo. Defina consentimento antes dessas integrações; registre compra somente após pagamento confirmado. As ferramentas WebMCP usam o estado da interface e nunca abrem pagamento automaticamente.
+
+## Pendências da operação
+
+Os testes locais não confirmam publicação, pagamento real ou adequação comercial integral. O art. 2º do [Decreto 7.962/2013](https://www.planalto.gov.br/ccivil_03/_ato2011-2014/2013/decreto/d7962.htm) exige identificação e canais de contato do fornecedor no comércio eletrônico. Os campos ficaram vazios conforme solicitado; o prazo não substitui essas informações. Marca, domínio, autorização das imagens do fabricante e políticas devem corresponder à operação real.
+
+Fontes: [pesquisa](docs/pesquisa-e-conteudo.md) e [proveniência das imagens](docs/imagens.md).
+
+## Verificação das dependências
+
+Em 06/10/2026, Next.js foi atualizado para 16.3.8 e sharp para 0.35.5. `npm audit --omit=dev` reportou zero vulnerabilidades. A árvore completa de desenvolvimento ainda reporta 20 avisos (13 altos e 7 moderados), envolvendo ferramentas de lint/build e o caminho legado Sites/Vinext/Cloudflare. As correções propostas pelo audit para parte dessa árvore exigem versões fora das faixas atuais, inclusive downgrades; precisam de uma revisão própria antes de executar esses caminhos. O resultado da auditoria de produção não é uma certificação de segurança integral.

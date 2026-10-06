@@ -1,3 +1,6 @@
-import { env } from "cloudflare:workers";
+import "server-only";
 import type { CommerceEnv } from "./checkout";
-export function commerceEnv(): CommerceEnv { return env as CommerceEnv; }
+// Hostinger/Node reads runtime settings here; secrets never enter client props.
+export function commerceEnv(): CommerceEnv {
+  return process.env as CommerceEnv;
+}

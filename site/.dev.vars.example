@@ -1,4 +1,5 @@
-# Copy to .dev.vars for LOCAL TESTING ONLY. Never commit real secrets.
+# Legacy Sites/Vinext configuration only. For Hostinger/Next.js use .env.example.
+# Never commit real secrets.
 STRIPE_SECRET_KEY=
 CHECKOUT_ENABLED=false
 SITE_URL=https://plena-cuidado-no-seu-ritmo.espa-o-de-tr-9439.chatgpt.site
@@ -8,4 +9,4 @@ STORE_ADDRESS=
 STORE_EMAIL=
 STORE_PHONE=
 DELIVERY_MIN_DAYS=
-DELIVERY_MAX_DAYS=
+DELIVERY_MAX_DAYS=10
