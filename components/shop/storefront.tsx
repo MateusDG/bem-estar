@@ -507,7 +507,7 @@ export default function Storefront() {
                     <small>Frete grátis · compra única</small>
                   </div>
                   <div className="summary-total">
-                    <span>Total</span>
+                    <span>Total no Pix</span>
                     <strong>{money(bundle.priceCents)}</strong>
                   </div>
                   <button className="primary-button" onClick={review}>
@@ -521,7 +521,8 @@ export default function Storefront() {
             </div>
             <p className="kits-footnote">
               A economia dos kits é calculada em relação ao preço de R$ 69,90
-              por frasco avulso. Sem assinatura.
+              por frasco avulso. Sem assinatura. No cartão, as taxas são
+              acrescentadas pela InfinitePay. Confira o valor final antes de pagar.
             </p>
           </div>
         </section>
@@ -662,12 +663,17 @@ export default function Storefront() {
                   <dd>Grátis</dd>
                 </div>
                 <div className="review-total">
-                  <dt>Total</dt>
+                  <dt>Total no Pix</dt>
                   <dd>{money(bundle.priceCents)}</dd>
                 </div>
               </dl>
               <p className="delivery-estimate">
                 {deliveryLabel(store)} após a confirmação do pagamento.
+              </p>
+              <p>
+                No cartão, as taxas são acrescentadas pela InfinitePay, inclusive
+                no pagamento à vista. O valor final e as opções de parcelamento
+                aparecem no próximo passo, antes de confirmar o pagamento.
               </p>
               <p className="checkout-explainer">
                 <LockKeyhole size={20} aria-hidden="true" /> No próximo passo, a
@@ -751,10 +757,14 @@ export default function Storefront() {
                   <ChevronRight aria-hidden="true" />
                 </button>
               </div>
-              {store.email ? (
+              {store.email || store.phone ? (
                 <p>
-                  Fale com nossa equipe:{" "}
-                  <a href={"mailto:" + store.email}>{store.email}</a>
+                  Fale com nossa equipe:
+                  {store.email && (
+                    <>
+                      {" "}<a href={"mailto:" + store.email}>{store.email}</a>
+                    </>
+                  )}
                   {store.phone && (
                     <>
                       <br />

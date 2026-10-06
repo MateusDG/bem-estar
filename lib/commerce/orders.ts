@@ -28,14 +28,19 @@ export class OrderStore {
   private db: DatabaseSync;
   constructor(directory: string, production = false) {
     if (!validDataDir(directory, production)) throw new Error("Invalid private order directory");
+    // Windows does not expose POSIX privacy bits. Permit local development,
+    // while production keeps requiring the Linux/POSIX storage checks below.
+    if (process.platform === "win32" && production)
+      throw new Error("Production order storage requires POSIX file permissions");
     mkdirSync(directory, { recursive: true, mode: 0o700 });
     const actual = realpathSync(directory);
     if (!validDataDir(actual, production)) throw new Error("Unsafe order directory");
-    if (statSync(actual).mode & 0o077) throw new Error("Order directory must be private (0700)");
+    if (process.platform !== "win32" && (statSync(actual).mode & 0o077))
+      throw new Error("Order directory must be private (0700)");
     const filename = join(actual, "orders.sqlite");
     if (existsSync(filename) && !lstatSync(filename).isFile()) throw new Error("Unsafe database file");
     this.db = new DatabaseSync(filename);
-    chmodSync(filename, 0o600);
+    if (process.platform !== "win32") chmodSync(filename, 0o600);
     this.db.exec(`PRAGMA busy_timeout=1000; PRAGMA journal_mode=WAL;
       CREATE TABLE IF NOT EXISTS orders (
         nsu TEXT PRIMARY KEY, request_key TEXT NOT NULL UNIQUE,

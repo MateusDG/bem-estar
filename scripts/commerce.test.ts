@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -18,9 +18,21 @@ const offline = (() => { throw new Error("External network forbidden"); }) as ty
 function fixture(t: test.TestContext) {
   const directory = mkdtempSync(join(tmpdir(), "bdh-orders-test-"));
   const orders = new OrderStore(directory);
-  t.after(() => { orders.close(); rmSync(directory, { recursive: true, force: true }); });
+  // Windows can briefly retain WAL file handles after closing SQLite.
+  t.after(() => { orders.close(); rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); });
   return { directory, orders };
 }
+test("Windows development storage works but cannot silently bypass production privacy checks", { skip: process.platform !== "win32" }, t => {
+  const { directory, orders } = fixture(t);
+  assert.ok(orders.reserve(randomUUID(), bundles[0], "fixture-merchant").order.nsu);
+  assert.throws(() => new OrderStore(directory, true), /POSIX file permissions/);
+});
+test("POSIX order storage rejects a directory accessible by other users", { skip: process.platform === "win32" }, t => {
+  const directory = mkdtempSync(join(tmpdir(), "bdh-orders-test-permissions-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
+  chmodSync(directory, 0o755);
+  assert.throws(() => new OrderStore(directory), /private \(0700\)/);
+});
 function post(body: unknown, source = origin, internal = origin) {
   return new Request(internal + "/api/checkout", { method: "POST", headers: { Origin: source, "Content-Type": "application/json" }, body: JSON.stringify(body) });
 }
@@ -52,6 +64,7 @@ test("readiness requires a public handle, private persistent directory, enabled 
   assert.equal(storeConfig(env).deliveryMinDays, null);
 });
 test("CNPJ validation still supports valid numeric and alphanumeric formats", () => {
+  assert.equal(validCnpj("45.475.531/0001-79"), true);
   assert.equal(validCnpj("11.222.333/0001-81"), true);
   assert.equal(validCnpj("00000000000000"), false);
   assert.equal(validCnpj("11.222.333/0001-80"), false);

@@ -37,7 +37,7 @@ Cada chamada de criação envia o webhook e o retorno. Abrir a URL do webhook no
 ## Conferência antes de tráfego pago
 
 - Habilite Checkout Integrado e Etapa de endereço na conta. Ambos foram vistos habilitados no painel em 06/10/2026.
-- Confira cartão, Pix e como a conta trata taxas de parcelamento. O preço enviado é o total do kit, com frete grátis.
+- Confira cartão, Pix e como a conta trata taxas de parcelamento. A configuração verificada repassa todas as taxas do cartão ao comprador, inclusive à vista; por isso a loja mostra o total no Pix e avisa sobre o acréscimo antes do checkout. O preço enviado é o total original do kit, com frete grátis. Atualize esse aviso se a política de taxas mudar.
 - Execute npm run test:commerce, npm run lint e npm run build. Os testes não fazem pagamentos.
 - Após publicar, confira GET /api/store: checkoutReady deve ser true. Configure hPanel e republique se for false; nenhuma credencial é retornada por essa rota.
 - Confira os três kits no checkout, incluindo quantidade e total. Teste uma compra pela operação, acompanhe a aprovação no painel e verifique retorno/webhook e persistência após reiniciar o processo. Não marque uma venda como paga pelo texto da URL.

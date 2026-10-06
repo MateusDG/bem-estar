@@ -89,4 +89,4 @@ Para indexação, defina SITE_INDEXABLE=true antes do build de lançamento. O do
 
 Abra em computador e celular. Verifique imagens, ampliação, ajuda, seleção, resumo e retorno do foco ao fechar a revisão. Confirme que /api/store responde JSON com checkoutReady coerente com a configuração e deliveryMaxDays: 10, sem segredos. Valide entrega real, atendimento e políticas com a operação.
 
-Os dados comerciais ficaram vazios conforme solicitado. A exigência de identificação e contato está no [README](../README.md#pendências-da-operação) e continua sendo uma pendência de lançamento comercial.
+Configure também STORE_COMPANY_NAME, STORE_CNPJ, STORE_ADDRESS, STORE_EMAIL e STORE_PHONE com a identificação e o atendimento reais. A identificação indicada e a conta de recebimento estão registradas no [README](../README.md#pendências-da-operação). Após aplicar as mudanças e reimplantar, confirme os campos públicos em /api/store e no rodapé da loja.
