@@ -38,7 +38,7 @@ Cada chamada de criação envia o webhook e o retorno. Abrir a URL do webhook no
 ## Conferência antes de tráfego pago
 
 - Habilite Checkout Integrado e Etapa de endereço na conta. Ambos foram vistos habilitados no painel em 06/10/2026.
-- Confira cartão, Pix e como a conta trata taxas de parcelamento. A configuração verificada repassa todas as taxas do cartão ao comprador, inclusive à vista; por isso a loja mostra o total no Pix e avisa sobre o acréscimo antes do checkout. O preço enviado é o total original do kit, com frete grátis. Atualize esse aviso se a política de taxas mudar.
+- Confira cartão, Pix e como a conta trata taxas de parcelamento. A configuração verificada em 06/10/2026 assume as taxas até 4x; por isso a loja oferece até 4x sem juros. O painel atualmente lista somente cartão como meio habilitado. O preço enviado é o total original do kit, com frete grátis. Atualize esse aviso se a política de taxas mudar.
 - Execute npm run test:commerce, npm run lint e npm run build. Os testes não fazem pagamentos.
 - Após publicar, confira GET /api/store: checkoutReady deve ser true. Configure hPanel e republique se for false; nenhuma credencial é retornada por essa rota.
 - Confira os três kits no checkout, incluindo quantidade e total. Teste uma compra pela operação, acompanhe a aprovação no painel e verifique retorno/webhook e persistência após reiniciar o processo. Não marque uma venda como paga pelo texto da URL.
@@ -48,7 +48,7 @@ Cada chamada de criação envia o webhook e o retorno. Abrir a URL do webhook no
 
 ### Produto de teste de R$ 1,00
 
-A página `/teste-checkout` oferece uma cobrança real e única de 100 centavos no Pix, sem entrega física. Ela usa os mesmos pedidos persistentes, criação de link, webhook e confirmação dos kits. O preço é definido no servidor. O cartão mantém o repasse de taxas da conta.
+A página `/teste-checkout` oferece uma cobrança real e única de 100 centavos, sem entrega física. Ela usa os mesmos pedidos persistentes, criação de link, webhook e confirmação dos kits. O preço é definido no servidor. O cartão segue a política da conta, que assume as taxas até 4x, respeitando os limites de valor e parcelas do provedor.
 
 Habilite `CHECKOUT_TEST_ENABLED=true` na hospedagem para disponibilizar o botão. Após concluir a compra de teste e conferir o retorno e a confirmação, defina a variável como `false` para encerrar os testes. Pedidos existentes continuam consultáveis. A página tem `noindex` e não aparece entre os kits.
 

@@ -309,7 +309,7 @@ export default function ProductDetails({
                 Depois de revisar seu pedido, você segue para uma página segura
                 da InfinitePay. Lá você informa seu contato e endereço e escolhe
                 entre as formas de pagamento disponíveis. A compra é única, sem
-                assinatura.
+                assinatura. No cartão, pague em até 4x sem juros.
                 {!store.checkoutReady && (
                   <>
                     {" "}

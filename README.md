@@ -67,7 +67,7 @@ Sem configuração válida, seleção e revisão funcionam e o pagamento fica in
 
 ## InfinitePay e entrega
 
-POST /api/checkout envia o pedido à API documentada da InfinitePay e retorna o link de pagamento. O servidor define os totais: 1 frasco por R$ 69,90; 2 por R$ 99,90; 3 por R$ 149,90. Cada kit é um único item com o preço do kit, sem taxa de frete ou assinatura. A quantidade de frascos aparece na descrição. As formas de pagamento e eventuais taxas de parcelamento seguem a configuração da conta InfinitePay.
+POST /api/checkout envia o pedido à API documentada da InfinitePay e retorna o link de pagamento. O servidor define os totais: 1 frasco por R$ 69,90; 2 por R$ 99,90; 3 por R$ 139,90. Cada kit é um único item com o preço do kit, sem taxa de frete ou assinatura. A quantidade de frascos aparece na descrição. As formas de pagamento e eventuais taxas de parcelamento seguem a configuração da conta InfinitePay.
 
 `SITE_URL` define o domínio público para validar a origem e receber o retorno do pagamento, mesmo quando o proxy passa um endereço interno ao Next.js. O acesso HTTP por loopback para testes locais é permitido somente com `NODE_ENV=development` e host/porta correspondentes.
 
@@ -93,7 +93,7 @@ Não há Meta Pixel ou analytics publicitário ativo. Defina consentimento antes
 
 ## Pendências da operação
 
-Os testes locais não confirmam pagamento real ou adequação comercial integral. O art. 2º do [Decreto 7.962/2013](https://www.planalto.gov.br/ccivil_03/_ato2011-2014/2013/decreto/d7962.htm) exige identificação e canais de contato do fornecedor no comércio eletrônico. A identificação indicada para a loja é ISS Comércio Saúde e Bem Estar Ltda., CNPJ 45.475.531/0001-79, conforme [cadastro fornecido pelo responsável](https://cnpj.biz/45475531000179). Configure os campos STORE_* na hospedagem; eles aparecem no rodapé e no atendimento. A conta de recebimento InfinitePay continua mateus-diniz-5eo, conforme confirmado pelo responsável. No cartão, a conta repassa todas as taxas ao comprador; a loja informa o total no Pix e explica o acréscimo antes de abrir o checkout. Marca, domínio, autorização das imagens do fabricante e políticas devem corresponder à operação real.
+Os testes locais não confirmam pagamento real ou adequação comercial integral. O art. 2º do [Decreto 7.962/2013](https://www.planalto.gov.br/ccivil_03/_ato2011-2014/2013/decreto/d7962.htm) exige identificação e canais de contato do fornecedor no comércio eletrônico. A identificação indicada para a loja é ISS Comércio Saúde e Bem Estar Ltda., CNPJ 45.475.531/0001-79, conforme [cadastro fornecido pelo responsável](https://cnpj.biz/45475531000179). Configure os campos STORE_* na hospedagem; eles aparecem no rodapé e no atendimento. A conta de recebimento InfinitePay continua mateus-diniz-5eo, conforme confirmado pelo responsável. No cartão, a conta assume as taxas até 4x; a loja oferece até 4x sem juros. Essa configuração foi confirmada no painel InfinitePay. Marca, domínio, autorização das imagens do fabricante e políticas devem corresponder à operação real.
 
 Fontes: [pesquisa](docs/pesquisa-e-conteudo.md) e [proveniência das imagens](docs/imagens.md).
 

@@ -315,7 +315,7 @@ export default function Storefront() {
             <div className="hero-price">
               <span>A partir de</span>
               <strong>R$ 69,90</strong>
-              <span>1 frasco · frete grátis</span>
+              <span>1 frasco · frete grátis · até 4x sem juros</span>
             </div>
             <p className="delivery-estimate">
               <Truck size={18} aria-hidden="true" /> {deliveryLabel(store)} após
@@ -504,10 +504,10 @@ export default function Storefront() {
                   <div>
                     <span>Seu pedido</span>
                     <strong>{bundle.label} de Coenzima Q10 Nutrify</strong>
-                    <small>Frete grátis · compra única</small>
+                    <small>Frete grátis · até 4x sem juros · compra única</small>
                   </div>
                   <div className="summary-total">
-                    <span>Total no Pix</span>
+                    <span>Total</span>
                     <strong>{money(bundle.priceCents)}</strong>
                   </div>
                   <button className="primary-button" onClick={review}>
@@ -521,8 +521,7 @@ export default function Storefront() {
             </div>
             <p className="kits-footnote">
               A economia dos kits é calculada em relação ao preço de R$ 69,90
-              por frasco avulso. Sem assinatura. No cartão, as taxas são
-              acrescentadas pela InfinitePay. Confira o valor final antes de pagar.
+              por frasco avulso. Sem assinatura. Até 4x sem juros no cartão.
             </p>
           </div>
         </section>
@@ -663,23 +662,14 @@ export default function Storefront() {
                   <dd>Grátis</dd>
                 </div>
                 <div className="review-total">
-                  <dt>Total no Pix</dt>
+                  <dt>Total</dt>
                   <dd>{money(bundle.priceCents)}</dd>
                 </div>
               </dl>
               <p className="delivery-estimate">
                 {deliveryLabel(store)} após a confirmação do pagamento.
               </p>
-              <p>
-                No cartão, as taxas são acrescentadas pela InfinitePay, inclusive
-                no pagamento à vista. O valor final e as opções de parcelamento
-                aparecem no próximo passo, antes de confirmar o pagamento.
-              </p>
-              <p className="checkout-explainer">
-                <LockKeyhole size={20} aria-hidden="true" /> No próximo passo, a
-                InfinitePay pede seu contato, endereço de entrega e forma de
-                pagamento.
-              </p>
+              <p>Até 4x sem juros no cartão.</p>
               {!store.checkoutReady && (
                 <p className="availability-note" role="status">
                   A loja está em preparação. O pagamento ainda não está
