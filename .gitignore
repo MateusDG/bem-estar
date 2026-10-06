@@ -8,7 +8,7 @@ node_modules/
 .yarn/unplugged/
 .yarn/install-state.gz
 
-# Generated builds and local runtime data (site/build/ contains source)
+# Generated builds and local runtime data
 dist/
 .next/
 .vinext/
@@ -56,3 +56,4 @@ work/
 # Original generated assets and deployment archives; web assets stay tracked
 /assets-source/
 /*-deploy.tar.gz
+/*-deploy.zip
