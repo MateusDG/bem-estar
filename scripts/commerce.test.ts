@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 import { checkoutParams, handleCheckout, handleOrderStatus, handleWebhook, storeConfig, validCnpj, type CommerceEnv } from "../lib/commerce/checkout.ts";
 import { OrderStore } from "../lib/commerce/orders.ts";
 import { paymentUrl } from "../lib/commerce/payment-url.ts";
-import { bundles } from "../lib/catalog.ts";
+import { bundles, testProduct } from "../lib/catalog.ts";
 // All providers below are simulated: tests never send requests or payments.
 const origin = "https://store.example.test";
 const env: CommerceEnv = { INFINITEPAY_HANDLE: "fixture-merchant", COMMERCE_DATA_DIR: "/tmp/fixture-orders", SITE_URL: origin, CHECKOUT_ENABLED: "true", NODE_ENV: "production" };
@@ -55,6 +55,38 @@ test("three kits send one item at the exact kit total and no shipping fee", () =
     assert.equal(data.redirect_url, origin + "/?checkout=complete");
     assert.equal(data.webhook_url, origin + "/api/webhooks/infinitepay");
   }
+});
+
+test("R$1 test product is opt-in and cannot accept a price override", async t => {
+  const { orders } = fixture(t);
+  const testEnv = { ...env, CHECKOUT_TEST_ENABLED: "true" };
+  assert.throws(() => checkoutParams("test", origin, "BDH-fixture", env), /Invalid bundle/);
+  assert.equal((await handleCheckout(post({ bundleId: "test", requestId }), env, { fetch: offline })).status, 400);
+  assert.equal((await handleCheckout(post({ bundleId: "test", requestId, price: 1 }), testEnv, { fetch: offline })).status, 400);
+  const provider = (async (_url, options) => {
+    const data = JSON.parse(String(options?.body));
+    assert.equal(data.items[0].price, 100);
+    assert.equal(data.items[0].quantity, 1);
+    assert.match(data.items[0].description, /sem entrega de produto físico/);
+    assert.equal(data.redirect_url, origin + "/teste-checkout?checkout=complete");
+    assert.equal(data.webhook_url, origin + "/api/webhooks/infinitepay");
+    return Response.json({ url: paymentLink });
+  }) as typeof fetch;
+  const created = await handleCheckout(post({ bundleId: "test", requestId }), testEnv, { orders, fetch: provider });
+  assert.equal(created.status, 200);
+  const { orderReference } = await created.json();
+  assert.equal(orders.get(orderReference)?.amount, 100);
+  assert.equal(orders.get(orderReference)?.bundle_id, "test");
+});
+
+test("test payment follows real verification and remains identifiable after test product is disabled", async t => {
+  const { orders } = fixture(t);
+  const order = orders.reserve(randomUUID(), testProduct, env.INFINITEPAY_HANDLE!).order;
+  const provider = (() => Promise.resolve(Response.json({ success: true, paid: true, amount: 100, paid_amount: 100, capture_method: "pix" }))) as typeof fetch;
+  assert.equal((await handleWebhook(webhook(order.nsu, { amount: 100 }), env, { orders, fetch: provider })).status, 200);
+  assert.deepEqual(await (await handleOrderStatus(status(order.nsu), env, { orders, fetch: offline })).json(), {
+    status: "paid", orderReference: order.nsu, quantity: 1, totalCents: 100, isTest: true,
+  });
 });
 test("readiness requires a public handle, private persistent directory, enabled flag and HTTPS origin", () => {
   assert.equal(storeConfig(env).checkoutReady, true);

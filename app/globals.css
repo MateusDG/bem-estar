@@ -1,6 +1,32 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "../vendor/shadcn-tailwind-4.13.0.css";
+.test-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding-block: 28px; border-bottom: 1px solid var(--border); }
+.test-main { max-width: 1060px; padding-block: 54px 64px; }
+.test-main h1 { font-size: clamp(2.8rem, 5vw, 4.4rem); margin-block: 14px 20px; }
+.test-intro { max-width: 650px; color: var(--sub); }
+.test-card { display: grid; grid-template-columns: 1fr 0.85fr; margin-top: 36px; border: 1px solid var(--border); border-radius: 18px; overflow: hidden; }
+.test-card > div { padding: 34px; }
+.test-card h2 { font-size: 2rem; margin-block: 14px 20px; }
+.test-card p + p { margin-top: 16px; }
+.test-price { background: var(--pale); border-left: 1px solid var(--border); }
+.test-price strong { display: block; font-family: Georgia, serif; font-size: 3.5rem; line-height: 1.2; margin-bottom: 20px; }
+.test-price > p { font-size: 0.85rem; }
+.test-price .primary-button { margin-block: 24px 14px; width: 100%; }
+.test-security { display: flex; gap: 8px; align-items: center; }
+.test-error { color: var(--destructive); margin-top: 16px; }
+.test-contact { margin-top: 34px; color: var(--sub); }
+.test-contact h2 { font-size: 1.4rem; color: var(--ink); margin-bottom: 12px; }
+.test-contact a { display: block; width: fit-content; padding-block: 4px; }
+.test-contact p:last-child { margin-top: 14px; font-size: 0.85rem; }
+@media (max-width: 700px) {
+  .test-card { grid-template-columns: 1fr; }
+  .test-card > div { padding: 24px; }
+  .test-price { border-left: 0; border-top: 1px solid var(--border); }
+  .test-header .brand { font-size: 1.2rem; }
+  .test-header .text-button { font-size: 0.8rem; }
+  .test-main { padding-top: 32px; }
+}
 :root {
   --background: #fff;
   --foreground: #173f46;

@@ -1,4 +1,8 @@
 export type BundleId = "one" | "two" | "three";
+export type CheckoutProductId = BundleId | "test";
+export const testProduct = {
+  id: "test", quantity: 1, priceCents: 100, label: "Produto de teste do checkout",
+} as const;
 export const bundles = [
   { id: "one", quantity: 1, priceCents: 6990, label: "1 frasco" },
   { id: "two", quantity: 2, priceCents: 9990, label: "2 frascos" },
@@ -22,6 +26,8 @@ export const money = (cents: number) =>
   );
 export const findBundle = (id: unknown) =>
   bundles.find((bundle) => bundle.id === id);
+export const findCheckoutProduct = (id: unknown, testEnabled: boolean) =>
+  id === "test" && testEnabled ? testProduct : findBundle(id);
 export interface StoreConfig {
   checkoutReady: boolean;
   companyName: string;

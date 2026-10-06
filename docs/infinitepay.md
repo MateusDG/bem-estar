@@ -19,6 +19,7 @@ Fontes: [documentação do checkout](https://www.infinitepay.io/checkout-documen
 | SITE_URL | https://bemnasaude.com.br |
 | COMMERCE_DATA_DIR | Pasta privada persistente fora da aplicação/release, caminho absoluto |
 | CHECKOUT_ENABLED | true depois de configurar o armazenamento |
+| CHECKOUT_TEST_ENABLED | true somente durante o teste real de R$ 1,00 |
 | DELIVERY_MAX_DAYS | 10 |
 
 Use o exemplo de caminho e os comandos de publicação em [Hostinger](hostinger.md#infinitepay-e-lançamento). O caminho precisa existir ou permitir criação pelo processo Node.js, com permissão 0700. O SQLite é uma instalação local em disco; não use este modelo em hospedagem sem disco persistente ou com instâncias em hosts separados. Nesse caso, migre o registro para um banco compartilhado antes de habilitar compras.
@@ -44,5 +45,11 @@ Cada chamada de criação envia o webhook e o retorno. Abrir a URL do webhook no
 - Consulte contatos e endereço no painel InfinitePay antes de enviar e mantenha backup do banco privado. A aplicação não envia mensagens nem atualizações de entrega automaticamente.
 
 ## Verificação técnica realizada
+
+### Produto de teste de R$ 1,00
+
+A página `/teste-checkout` oferece uma cobrança real e única de 100 centavos no Pix, sem entrega física. Ela usa os mesmos pedidos persistentes, criação de link, webhook e confirmação dos kits. O preço é definido no servidor. O cartão mantém o repasse de taxas da conta.
+
+Habilite `CHECKOUT_TEST_ENABLED=true` na hospedagem para disponibilizar o botão. Após concluir a compra de teste e conferir o retorno e a confirmação, defina a variável como `false` para encerrar os testes. Pedidos existentes continuam consultáveis. A página tem `noindex` e não aparece entre os kits.
 
 Uma chamada real à API gerou um link para a conta configurada sem exigir API Key. Apenas o link foi criado: nenhum cartão, dado pessoal ou pagamento foi enviado. A aprovação, os erros e os eventos duplicados são testados com respostas simuladas; aprovação real e entrega de webhook público não podem ser afirmadas por esses testes.

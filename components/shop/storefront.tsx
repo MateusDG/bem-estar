@@ -62,7 +62,7 @@ export default function Storefront() {
   const bundle = findBundle(bundleId);
   useEffect(() => {
     const controller = new AbortController();
-    fetch("/api/store", { signal: controller.signal })
+    fetch("/api/store", { signal: controller.signal, cache: "no-store" })
       .then(async (response) =>
         response.ok ? ((await response.json()) as StoreConfig) : emptyStore,
       )

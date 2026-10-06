@@ -2,10 +2,10 @@ import { DatabaseSync } from "node:sqlite";
 import { chmodSync, existsSync, lstatSync, mkdirSync, realpathSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { randomUUID } from "node:crypto";
-import type { BundleId } from "../catalog.ts";
+import type { CheckoutProductId } from "../catalog.ts";
 
 export type Order = {
-  nsu: string; request_key: string; bundle_id: BundleId; quantity: number;
+  nsu: string; request_key: string; bundle_id: CheckoutProductId; quantity: number;
   amount: number; handle: string; state: "pending" | "paid";
   checkout_url: string | null; lease_until: number; created_at: string;
   transaction_nsu: string | null; invoice_slug: string | null;
@@ -54,7 +54,7 @@ export class OrderStore {
   get(nsu: string): Order | undefined {
     return this.db.prepare("SELECT * FROM orders WHERE nsu = ?").get(nsu) as Order | undefined;
   }
-  reserve(requestKey: string, bundle: { id: BundleId; quantity: number; priceCents: number }, handle: string) {
+  reserve(requestKey: string, bundle: { id: CheckoutProductId; quantity: number; priceCents: number }, handle: string) {
     this.db.prepare(`INSERT OR IGNORE INTO orders
       (nsu, request_key, bundle_id, quantity, amount, handle, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)`)

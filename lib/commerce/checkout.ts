@@ -2,7 +2,7 @@ import { OrderStore, validDataDir, type Order } from "./orders.ts";
 import { paymentUrl } from "./payment-url.ts";
 import {
   deliveryMaxBusinessDays,
-  findBundle,
+  findCheckoutProduct,
   type StoreConfig,
 } from "../catalog.ts";
 export type CommerceEnv = Partial<
@@ -10,6 +10,7 @@ export type CommerceEnv = Partial<
     | "INFINITEPAY_HANDLE"
     | "COMMERCE_DATA_DIR"
     | "CHECKOUT_ENABLED"
+    | "CHECKOUT_TEST_ENABLED"
     | "SITE_URL"
     | "NODE_ENV"
     | "STORE_COMPANY_NAME"
@@ -153,16 +154,16 @@ async function readJson(request: Request, limit: number): Promise<Record<string,
   return payload as Record<string, unknown>;
 }
 export function checkoutParams(bundleId: unknown, origin: string, nsu: string, env: CommerceEnv) {
-  const bundle = findBundle(bundleId);
+  const bundle = findCheckoutProduct(bundleId, env.CHECKOUT_TEST_ENABLED === "true");
   if (!bundle) throw new Error("Invalid bundle");
   return {
     handle: env.INFINITEPAY_HANDLE,
     order_nsu: nsu,
-    redirect_url: origin + "/?checkout=complete",
+    redirect_url: origin + (bundle.id === "test" ? "/teste-checkout" : "/") + "?checkout=complete",
     webhook_url: trustedOrigin(env) + "/api/webhooks/infinitepay",
     // One kit is one item: using bottle quantity here would multiply the kit price.
     items: [{ quantity: 1, price: bundle.priceCents,
-      description: "Coenzima Q10 Nutrify — " + bundle.label +
+      description: bundle.id === "test" ? "Produto de teste do checkout — sem entrega de produto físico. Compra única." : "Coenzima Q10 Nutrify — " + bundle.label +
         ", 60 cápsulas por frasco. Frete grátis. Compra única." }],
   };
 }
@@ -176,7 +177,7 @@ export async function handleCheckout(request: Request, env: CommerceEnv, deps: C
   let values: Record<string, unknown>;
   try { values = await readJson(request, 2048); }
   catch { return response({ error: "Pedido inválido." }, 400); }
-  const bundle = findBundle(values.bundleId);
+  const bundle = findCheckoutProduct(values.bundleId, env.CHECKOUT_TEST_ENABLED === "true");
   if (Object.keys(values).length !== 2 || !bundle || typeof values.requestId !== "string" ||
       !uuid.test(values.requestId))
     return response({ error: "Escolha um kit válido e tente novamente." }, 400);
@@ -201,21 +202,26 @@ export async function handleCheckout(request: Request, env: CommerceEnv, deps: C
     });
     if (!result.ok) {
       orders.release(order.nsu);
-      throw new Error("Provider unavailable");
+      throw new Error("Provider HTTP " + result.status);
     }
     const data = await result.json() as { url?: unknown };
     const url = paymentUrl(data.url);
     if (!url || new URL(url).pathname !== "/" + order.handle) throw new Error("Invalid payment URL");
     orders.saveCheckout(order.nsu, url);
     return response({ url, orderReference: order.nsu });
-  } catch {
+  } catch (cause) {
     // A timeout can leave a provider invoice open. Keep the reservation for 60s.
+    // Log only known diagnostics, never provider bodies, customer data or URLs.
+    const message = cause instanceof Error ? cause.message : "Unknown failure";
+    console.error("Checkout failed:", /^(Provider HTTP \d{3}|Invalid (saved URL|payment URL)|Order configuration changed)$/.test(message)
+      ? message : cause instanceof Error ? cause.name : "Unknown failure");
     return response({ error: "Não foi possível abrir o pagamento. Nenhuma cobrança é feita nesta página. Aguarde um minuto e tente novamente." }, 502);
   } finally { if (!deps.orders) orders.close(); }
 }
 function publicOrder(order: Order) {
   return { status: order.state, orderReference: order.nsu,
-    quantity: order.quantity, totalCents: order.amount };
+    quantity: order.quantity, totalCents: order.amount,
+    ...(order.bundle_id === "test" ? { isTest: true } : {}) };
 }
 async function verifyPayment(order: Order, transaction: string, slug: string, orders: OrderStore, deps: CommerceDeps) {
   if (order.state === "paid") {
