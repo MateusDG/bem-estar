@@ -46,6 +46,9 @@ type ShopDialog = "review" | "image" | "help" | "privacy" | "returns";
 const bestValueBundleId = bundles.reduce((best, option) =>
   option.priceCents / option.quantity < best.priceCents / best.quantity ? option : best,
 ).id;
+const largestSaving = Math.max(
+  ...bundles.map((option) => option.oldPriceCents - option.priceCents),
+);
 
 export default function Storefront() {
   const [bundleId, setBundleId] = useState<BundleId | null>(null);
@@ -315,9 +318,10 @@ export default function Storefront() {
             <p className="serving-note">
               A porção corresponde a 2 cápsulas. Consulte a composição abaixo.
             </p>
+            <p className="hero-offer">OFERTAS ESPECIAIS</p>
             <div className="hero-price">
-              <span>A partir de</span>
-              <strong>R$ 69,90</strong>
+              <span>De <del>{money(bundles[0].oldPriceCents)}</del> por</span>
+              <strong>{money(bundles[0].priceCents)}</strong>
               <span>1 frasco · frete grátis · até 4x sem juros</span>
             </div>
             <p className="delivery-estimate">
@@ -404,15 +408,25 @@ export default function Storefront() {
               <div>
                 <p className="eyebrow">01 / SUA ESCOLHA</p>
                 <h2 id="kits-title" tabIndex={-1}>
-                  Escolha a quantidade
+                  Escolha seu kit.
                   <br />
-                  <em>de frascos.</em>
+                  <em>Aproveite a oferta.</em>
                 </h2>
               </div>
               <p>
                 Toque em um kit para selecionar.
                 <br />
                 Confira o total antes de pagar.
+              </p>
+            </div>
+            <div className="offer-banner">
+              <div>
+                <span className="offer-label">OFERTAS ESPECIAIS</span>
+                <p>Seu próximo kit, por muito menos.</p>
+              </div>
+              <p className="offer-benefits">
+                Economize até <strong>{money(largestSaving)}</strong>
+                <span>Frete grátis · até 4x sem juros</span>
               </p>
             </div>
             <RadioGroup
@@ -425,7 +439,7 @@ export default function Storefront() {
             >
               {bundles.map((option) => {
                 const selected = bundleId === option.id;
-                const saving = option.quantity * 6990 - option.priceCents;
+                const saving = option.oldPriceCents - option.priceCents;
                 return (
                   <label
                     key={option.id}
@@ -464,9 +478,14 @@ export default function Storefront() {
                     </div>
                     <h3>{option.label}</h3>
                     <p>{option.quantity * 60} cápsulas no total</p>
-                    <strong className="bundle-price">
-                      {money(option.priceCents)}
-                    </strong>
+                    <div className="bundle-price-block">
+                      <span className="bundle-old-price">
+                        De <del>{money(option.oldPriceCents)}</del>
+                      </span>
+                      <strong className="bundle-price">
+                        <span>Por </span>{money(option.priceCents)}
+                      </strong>
+                    </div>
                     <p className="per-bottle">
                       {money(option.priceCents / option.quantity)} por frasco
                     </p>
@@ -523,8 +542,8 @@ export default function Storefront() {
               )}
             </div>
             <p className="kits-footnote">
-              A economia dos kits é calculada em relação ao preço de R$ 69,90
-              por frasco avulso. Sem assinatura. Até 4x sem juros no cartão.
+              Economia em relação ao preço anterior de cada kit. Compra única,
+              sem assinatura. Até 4x sem juros no cartão.
             </p>
           </div>
         </section>

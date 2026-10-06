@@ -4,9 +4,9 @@ export const testProduct = {
   id: "test", quantity: 1, priceCents: 100, label: "Produto de teste do checkout",
 } as const;
 export const bundles = [
-  { id: "one", quantity: 1, priceCents: 6990, label: "1 frasco" },
-  { id: "two", quantity: 2, priceCents: 9990, label: "2 frascos" },
-  { id: "three", quantity: 3, priceCents: 13990, label: "3 frascos" },
+  { id: "one", quantity: 1, priceCents: 6990, oldPriceCents: 29090, label: "1 frasco" },
+  { id: "two", quantity: 2, priceCents: 9990, oldPriceCents: 35990, label: "2 frascos" },
+  { id: "three", quantity: 3, priceCents: 13990, oldPriceCents: 39990, label: "3 frascos" },
 ] as const;
 export const product = {
   name: "Coenzima Q10",
