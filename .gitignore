@@ -1,0 +1,58 @@
+# Dependencies and package-manager caches
+node_modules/
+.pnp/
+.pnp.*
+.npm/
+.pnpm-store/
+.yarn/cache/
+.yarn/unplugged/
+.yarn/install-state.gz
+
+# Generated builds and local runtime data (site/build/ contains source)
+dist/
+.next/
+.vinext/
+out/
+.output/
+.wrangler/
+.vercel/
+.netlify/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# Secrets; keep empty configuration examples in version control
+.env
+.env.*
+!.env.example
+!.env.*.example
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Checkout-local tooling, logs and temporary files
+.sites-runtime/
+.agents/
+.codex/
+outputs/
+work/
+*.log
+*.tmp
+*.swp
+*.swo
+*~
+
+# macOS and editor-local metadata
+.DS_Store
+._*
+.Spotlight-V100/
+.Trashes/
+.idea/
+
+# Original generated assets and deployment archives; web assets stay tracked
+/assets-source/
+/*-deploy.tar.gz
