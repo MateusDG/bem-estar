@@ -1,15 +1,15 @@
-import type { NextConfig } from "next";
+// @ts-check
 import { fileURLToPath } from "node:url";
 
 const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 
-const nextConfig: NextConfig = {
+/** @type {import("next").NextConfig} */
+const nextConfig = {
   output: "standalone",
   outputFileTracingRoot: projectRoot,
   poweredByHeader: false,
   agentRules: false,
   devIndicators: false,
-  turbopack: { root: projectRoot },
 };
 
 export default nextConfig;

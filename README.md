@@ -2,7 +2,7 @@
 
 Página de produto para Coenzima Q10 Nutrify (SKU 1001726), com kits de 1, 2 ou 3 frascos. Aplicação Next.js / React em servidor Node.js. Prazo informado: **entrega em até 10 dias úteis após a confirmação do pagamento**, sem prazo mínimo prometido.
 
-O projeto está diretamente na raiz do repositório. `package.json`, `package-lock.json`, `next.config.ts`, `app/` e `public/` ficam juntos; não há uma pasta `site/` para selecionar na hospedagem.
+O projeto está diretamente na raiz do repositório. `package.json`, `package-lock.json`, `next.config.mjs`, `app/` e `public/` ficam juntos; não há uma pasta `site/` para selecionar na hospedagem.
 
 O código de pagamento ainda usa Stripe. A integração com InfinitePay está pendente; mantenha `CHECKOUT_ENABLED=false` até concluir e validar a troca.
 
@@ -40,7 +40,7 @@ npm run build
 npm start
 ```
 
-`npm run build` executa `next build` e, em seguida, o `postbuild` copia `public/` e `.next/static/` para `.next/standalone/`. O arquivo inicial de produção é `.next/standalone/server.js`. O servidor usa `PORT` e `HOSTNAME` fornecidos pela hospedagem; a porta padrão é 3000. Configure `HOSTNAME=0.0.0.0` no hPanel. Não execute `dev` em produção.
+`npm run build` executa `next build --webpack` e, em seguida, o `postbuild` copia `public/` e `.next/static/` para `.next/standalone/`. A configuração JavaScript (`next.config.mjs`) dispensa a compilação do arquivo de configuração. Webpack permite o fallback WebAssembly do SWC quando o binário nativo não carrega na hospedagem. O arquivo inicial de produção é `.next/standalone/server.js`. O servidor usa `PORT` e `HOSTNAME` fornecidos pela hospedagem; a porta padrão é 3000. Configure `HOSTNAME=0.0.0.0` no hPanel. Não execute `dev` em produção.
 
 ## Publicar na Hostinger
 
