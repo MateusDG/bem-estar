@@ -43,6 +43,9 @@ import {
 } from "@/lib/catalog";
 
 type ShopDialog = "review" | "image" | "help" | "privacy" | "returns";
+const bestValueBundleId = bundles.reduce((best, option) =>
+  option.priceCents / option.quantity < best.priceCents / best.quantity ? option : best,
+).id;
 
 export default function Storefront() {
   const [bundleId, setBundleId] = useState<BundleId | null>(null);
@@ -433,7 +436,7 @@ export default function Storefront() {
                       <span>
                         {option.quantity === 1
                           ? "PARA CONHECER"
-                          : option.quantity === 2
+                          : option.id === bestValueBundleId
                             ? "MENOR PREÇO POR FRASCO"
                             : "PARA TER POR PERTO"}
                       </span>
