@@ -97,6 +97,12 @@ Os testes locais não confirmam pagamento real ou adequação comercial integral
 
 Fontes: [pesquisa](docs/pesquisa-e-conteudo.md) e [proveniência das imagens](docs/imagens.md).
 
+## Carregamento no celular
+
+As fotos usam a otimização do `next/image`, com tamanhos responsivos e carregamento tardio fora do início da página. Os diálogos de revisão, atendimento e políticas são carregados sob demanda; a escolha do kit e o fluxo de pagamento permanecem no componente principal.
+
+O Tailwind examina somente `app`, `components/shop` e os componentes de interface listados em `app/globals.css`. Ao usar outro componente de `components/ui`, acrescente seu arquivo às diretivas `@source` para incluir seus estilos. O CSS reduzido é incorporado ao HTML no build de produção (`experimental.inlineCss`), evitando uma requisição que bloqueia a primeira renderização.
+
 ## Dependências
 
 `package-lock.json` fixa a árvore instalada por `npm ci`. Next.js e `eslint-config-next` usam a mesma versão, 16.3.8. A aplicação utiliza somente a configuração de build do Next.js; Vite, Vinext, Wrangler e dependências de Cloudflare/D1 não fazem parte deste projeto de publicação.

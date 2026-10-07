@@ -10,6 +10,10 @@ const nextConfig = {
   poweredByHeader: false,
   agentRules: false,
   devIndicators: false,
+  experimental: {
+    // The small storefront stylesheet can render with the document, without a CSS round trip.
+    inlineCss: true,
+  },
 };
 
 export default nextConfig;

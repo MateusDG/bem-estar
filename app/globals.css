@@ -1,6 +1,15 @@
-@import "tailwindcss";
+@import "tailwindcss" source(none);
 @import "tw-animate-css";
 @import "../vendor/shadcn-tailwind-4.13.0.css";
+/* Scan only the components used by this storefront, including deferred dialogs. */
+@source "./";
+@source "../components/shop";
+@source "../components/ui/accordion.tsx";
+@source "../components/ui/button.tsx";
+@source "../components/ui/dialog.tsx";
+@source "../components/ui/radio-group.tsx";
+@source "../components/ui/table.tsx";
+@source "../components/ui/tabs.tsx";
 .test-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding-block: 28px; border-bottom: 1px solid var(--border); }
 .test-main { max-width: 1060px; padding-block: 54px 64px; }
 .test-main h1 { font-size: clamp(2.8rem, 5vw, 4.4rem); margin-block: 14px 20px; }
@@ -2387,6 +2396,19 @@ main:focus-visible {
 /* Keep the kit comparison compact without reducing the reading size. */
 .kits-section .section-heading {
   margin-bottom: 24px;
+}
+.dialog-loading {
+  position: fixed;
+  bottom: calc(var(--mobile-cart-height) + 20px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  padding: 12px 22px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--background);
+  color: var(--ink);
+  box-shadow: 0 4px 20px #173f461a;
 }
 .kits-section .offer-banner {
   padding: 14px 20px;

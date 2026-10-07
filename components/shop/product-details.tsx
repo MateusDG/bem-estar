@@ -151,7 +151,7 @@ export default function ProductDetails({
       <section className="editorial-section">
         <div className="editorial-image">
           <Image
-            unoptimized
+            sizes="(max-width: 760px) 100vw, 55vw"
             src="/images/bem-de-hoje-editorial.webp"
             alt="Mulher de cabelos grisalhos aproveitando uma manhã tranquila em um jardim"
             width={1400}
