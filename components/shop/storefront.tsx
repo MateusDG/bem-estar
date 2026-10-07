@@ -43,6 +43,7 @@ import {
 } from "@/lib/catalog";
 
 type ShopDialog = "review" | "image" | "help" | "privacy" | "returns";
+const selectedKitStorageKey = "bem-de-hoje-selected-kit";
 const bestValueBundleId = bundles.reduce((best, option) =>
   option.priceCents / option.quantity < best.priceCents / best.quantity ? option : best,
 ).id;
@@ -97,9 +98,15 @@ export default function Storefront() {
     }
     // Wait for browser storage before saving preferences, including during Strict Mode replay.
     setPreferencesLoaded(true);
-    const restored = findBundle(
+    let restored = findBundle(
       new URLSearchParams(location.search).get("kit"),
     );
+    try {
+      restored ||= findBundle(sessionStorage.getItem(selectedKitStorageKey));
+      if (restored) sessionStorage.setItem(selectedKitStorageKey, restored.id);
+    } catch {
+      // A blocked storage area must not prevent selection or checkout.
+    }
     if (restored) setBundleId(restored.id);
     return () => {
       controller.abort();
@@ -169,6 +176,14 @@ export default function Storefront() {
   function choose(id: BundleId) {
     setBundleId(id);
     setError("");
+    try {
+      sessionStorage.setItem(selectedKitStorageKey, id);
+    } catch {}
+    const url = new URL(location.href);
+    if (url.searchParams.has("kit")) {
+      url.searchParams.set("kit", id);
+      history.replaceState(history.state, "", url);
+    }
   }
   function review() {
     if (!bundle) {
@@ -409,21 +424,14 @@ export default function Storefront() {
                 <p className="eyebrow">01 / SUA ESCOLHA</p>
                 <h2 id="kits-title" tabIndex={-1}>
                   Escolha seu kit.
-                  <br />
-                  <em>Aproveite a oferta.</em>
                 </h2>
               </div>
               <p>
-                Toque em um kit para selecionar.
-                <br />
-                Confira o total antes de pagar.
+                Selecione a quantidade de frascos.
               </p>
             </div>
             <div className="offer-banner">
-              <div>
-                <span className="offer-label">OFERTAS ESPECIAIS</span>
-                <p>Seu próximo kit, por muito menos.</p>
-              </div>
+              <span className="offer-label">OFERTAS ESPECIAIS</span>
               <p className="offer-benefits">
                 Economize até <strong>{money(largestSaving)}</strong>
                 <span>Frete grátis · até 4x sem juros</span>
@@ -460,58 +468,58 @@ export default function Storefront() {
                         className="bundle-radio"
                       />
                     </div>
-                    <div
-                      className={"bundle-bottles bottles-" + option.quantity}
-                      aria-hidden="true"
-                    >
-                      {Array.from({ length: option.quantity }, (_, i) => (
-                        <Image
-                          unoptimized
-                          src={product.image}
-                          key={i}
-                          alt=""
-                          width={1274}
-                          height={1274}
-                          loading="lazy"
-                        />
-                      ))}
+                    <div className="bundle-main">
+                      <div
+                        className={"bundle-bottles bottles-" + option.quantity}
+                        aria-hidden="true"
+                      >
+                        {Array.from({ length: option.quantity }, (_, i) => (
+                          <Image
+                            unoptimized
+                            src={product.image}
+                            key={i}
+                            alt=""
+                            width={1274}
+                            height={1274}
+                            loading="lazy"
+                          />
+                        ))}
+                      </div>
+                      <div className="bundle-copy">
+                        <h3>{option.label}</h3>
+                        <p>{option.quantity * 60} cápsulas no total</p>
+                        <div className="bundle-price-block">
+                          <span className="bundle-old-price">
+                            De <del>{money(option.oldPriceCents)}</del>
+                          </span>
+                          <strong className="bundle-price">
+                            <span>Por </span>{money(option.priceCents)}
+                          </strong>
+                        </div>
+                        <p className="per-bottle">
+                          {money(option.priceCents / option.quantity)} por frasco
+                        </p>
+                      </div>
                     </div>
-                    <h3>{option.label}</h3>
-                    <p>{option.quantity * 60} cápsulas no total</p>
-                    <div className="bundle-price-block">
-                      <span className="bundle-old-price">
-                        De <del>{money(option.oldPriceCents)}</del>
-                      </span>
-                      <strong className="bundle-price">
-                        <span>Por </span>{money(option.priceCents)}
-                      </strong>
-                    </div>
-                    <p className="per-bottle">
-                      {money(option.priceCents / option.quantity)} por frasco
-                    </p>
                     <div className="bundle-bottom">
-                      <span>
-                        <Truck size={16} aria-hidden="true" /> Frete grátis
-                      </span>
                       {saving > 0 && (
                         <span className="saving">
-                          Economize {money(saving)}
+                          Economize <strong>{money(saving)}</strong>
                         </span>
                       )}
+                      <span className="selected-label">
+                        {selected ? (
+                          <>
+                            <Check size={16} aria-hidden="true" /> Selecionado
+                          </>
+                        ) : (
+                          <>
+                            Escolher kit{" "}
+                            <Plus size={16} aria-hidden="true" />
+                          </>
+                        )}
+                      </span>
                     </div>
-                    <span className="selected-label">
-                      {selected ? (
-                        <>
-                          <Check size={16} aria-hidden="true" /> Seu kit
-                          selecionado
-                        </>
-                      ) : (
-                        <>
-                          Selecionar este kit{" "}
-                          <Plus size={16} aria-hidden="true" />
-                        </>
-                      )}
-                    </span>
                   </label>
                 );
               })}
@@ -711,7 +719,7 @@ export default function Storefront() {
                 {busy
                   ? "Abrindo pagamento…"
                   : store.checkoutReady
-                    ? "Ir para o pagamento seguro"
+                    ? "Continuar na InfinitePay"
                     : "Pagamento disponível em breve"}
                 {!busy && <ArrowRight size={20} aria-hidden="true" />}
               </button>

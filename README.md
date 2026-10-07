@@ -67,7 +67,7 @@ Sem configuração válida, seleção e revisão funcionam e o pagamento fica in
 
 ## InfinitePay e entrega
 
-POST /api/checkout envia o pedido à API documentada da InfinitePay e retorna o link de pagamento. O servidor define os totais: 1 frasco por R$ 69,90; 2 por R$ 99,90; 3 por R$ 139,90. Cada kit é um único item com o preço do kit, sem taxa de frete ou assinatura. A quantidade de frascos aparece na descrição. As formas de pagamento e eventuais taxas de parcelamento seguem a configuração da conta InfinitePay.
+POST /api/checkout envia o pedido à API documentada da InfinitePay e retorna o link de pagamento. O servidor define os totais: 1 frasco por R$ 39,90; 2 por R$ 69,90; 3 por R$ 109,90. Cada kit é um único item com o preço do kit, sem taxa de frete ou assinatura. A quantidade de frascos aparece na descrição. As formas de pagamento e eventuais taxas de parcelamento seguem a configuração da conta InfinitePay.
 
 `SITE_URL` define o domínio público para validar a origem e receber o retorno do pagamento, mesmo quando o proxy passa um endereço interno ao Next.js. O acesso HTTP por loopback para testes locais é permitido somente com `NODE_ENV=development` e host/porta correspondentes.
 

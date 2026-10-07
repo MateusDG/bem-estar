@@ -41,14 +41,14 @@ function reserve(orders: OrderStore, bundle = bundles[0]) {
 }
 function status(nsu: string, extra = "") { return new Request(origin + "/api/order-status?order_nsu=" + nsu + extra); }
 function webhook(nsu: string, changes: Record<string, unknown> = {}) {
-  return new Request(origin + "/api/webhooks/infinitepay", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ order_nsu: nsu, transaction_nsu: transaction, invoice_slug: "invoice-fixture", amount: 6990, ...changes }) });
+  return new Request(origin + "/api/webhooks/infinitepay", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ order_nsu: nsu, transaction_nsu: transaction, invoice_slug: "invoice-fixture", amount: 3990, ...changes }) });
 }
-const paid = (() => Promise.resolve(Response.json({ success: true, paid: true, amount: 6990, paid_amount: 7000, capture_method: "pix" }))) as typeof fetch;
+const paid = (() => Promise.resolve(Response.json({ success: true, paid: true, amount: 3990, paid_amount: 4000, capture_method: "pix" }))) as typeof fetch;
 
 test("three kits send one item at the exact kit total and no shipping fee", () => {
-  for (const bundle of bundles) {
+  for (const [index, bundle] of bundles.entries()) {
     const data = checkoutParams(bundle.id, origin, "BDH-fixture", env);
-    assert.deepEqual(data.items.map(item => [item.quantity, item.price]), [[1, bundle.priceCents]]);
+    assert.deepEqual(data.items.map(item => [item.quantity, item.price]), [[1, [3990, 6990, 10990][index]]]);
     assert.match(data.items[0].description, new RegExp(bundle.label));
     assert.match(data.items[0].description, /Frete grátis/);
     assert.equal(data.handle, "fixture-merchant");
@@ -114,7 +114,7 @@ test("production proxy internal addresses use the configured public callback and
     const data = JSON.parse(String(options?.body));
     assert.equal(data.redirect_url, origin + "/?checkout=complete");
     assert.equal(data.webhook_url, origin + "/api/webhooks/infinitepay");
-    assert.equal(data.items[0].price, 9990);
+    assert.equal(data.items[0].price, 6990);
     return Response.json({ url: paymentLink });
   }) as typeof fetch;
   assert.equal((await handleCheckout(post({ bundleId: "two", requestId }, origin, "http://127.0.0.1:3000"), env, { orders, fetch: provider })).status, 200);
@@ -175,8 +175,8 @@ test("payment return is verified server-to-server, accepting separate installmen
     return paid(url, options);
   }) as typeof fetch;
   const result = await handleOrderStatus(status(order.nsu, "&transaction_nsu=" + transaction + "&slug=invoice-fixture"), env, { orders, fetch: provider });
-  assert.deepEqual(await result.json(), { status: "paid", orderReference: order.nsu, quantity: 1, totalCents: 6990 });
-  assert.equal(orders.get(order.nsu)?.paid_amount, 7000);
+  assert.deepEqual(await result.json(), { status: "paid", orderReference: order.nsu, quantity: 1, totalCents: 3990 });
+  assert.equal(orders.get(order.nsu)?.paid_amount, 4000);
 });
 test("an order reference alone never fabricates payment approval", async t => {
   const { orders } = fixture(t); const order = reserve(orders);
@@ -192,7 +192,7 @@ test("paid browser query and forged webhook cannot override pending provider sta
 });
 test("wrong amounts, invalid provider shapes and provider outages keep the order unpaid", async t => {
   const { orders } = fixture(t); const order = reserve(orders);
-  for (const data of [{ success: true, paid: true, amount: 1, paid_amount: 6990, capture_method: "pix" }, { success: false, paid: true, amount: 6990 }, { success: true, paid: "true" }, { success: true, paid: true, amount: 6990, paid_amount: 1, capture_method: "pix" }]) {
+  for (const data of [{ success: true, paid: true, amount: 1, paid_amount: 3990, capture_method: "pix" }, { success: false, paid: true, amount: 3990 }, { success: true, paid: "true" }, { success: true, paid: true, amount: 3990, paid_amount: 1, capture_method: "pix" }]) {
     const provider = (() => Promise.resolve(Response.json(data))) as typeof fetch;
     assert.equal((await handleWebhook(webhook(order.nsu), env, { orders, fetch: provider })).status, 400);
     assert.equal(orders.get(order.nsu)?.state, "pending");
@@ -225,7 +225,7 @@ test("a provider transaction cannot confirm two local orders", async t => {
 test("paid requests cannot reopen a payment link", async t => {
   const { orders } = fixture(t);
   const order = orders.reserve(requestId + ":one", bundles[0], env.INFINITEPAY_HANDLE!).order;
-  orders.confirm(order.nsu, { transaction, slug: "fixture", paidAmount: 6990, method: "pix" });
+  orders.confirm(order.nsu, { transaction, slug: "fixture", paidAmount: 3990, method: "pix" });
   assert.equal((await handleCheckout(post({ bundleId: "one", requestId }), env, { orders, fetch: offline })).status, 409);
 });
 test("public configuration and status expose no credentials, private path or provider metadata", async t => {

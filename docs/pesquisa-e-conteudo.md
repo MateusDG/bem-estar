@@ -29,7 +29,7 @@ Fonte: [Coenzima Q10 Nutrify — SKU 1001726](https://www.nutrify.com.br/coenzim
 - Porção de 1,14 g: duas cápsulas. **100 mg de Coenzima Q10 por porção**, não por cápsula.
 - 30 porções por frasco, vitamina E 15 mg (100% VD), fibras 0,7 g (3% VD).
 - Ingredientes transcritos da ficha do SKU. Não se deduziu recomendação de uso individual nem duração de tratamento.
-- Preços fornecidos pelo lojista: R$ 69,90 / R$ 99,90 / R$ 139,90. Economia calculada contra unidades avulsas a R$ 69,90, sem referência a preço promocional do fabricante.
+- Preços atualizados pelo lojista em 07/10/2026: R$ 39,90 / R$ 69,90 / R$ 109,90. Preços anteriores informados pelo lojista: R$ 290,90 / R$ 359,90 / R$ 399,90; economia de R$ 251,00 / R$ 290,00 / R$ 290,00 por kit. O kit de 2 frascos tem o menor preço por frasco: R$ 34,95.
 
 [Anvisa — suplementos alimentares](https://www.gov.br/anvisa/pt-br/assuntos/alimentos/suplementos-alimentares/perguntas-frequentes/) e [cuidados com propaganda enganosa](https://www.gov.br/anvisa/pt-br/assuntos/alimentos/suplementos-alimentares/cuidado-com-a-propaganda-enganosa): suplementos não devem ser apresentados como prevenção ou tratamento de doenças. A página não afirma rejuvenescimento, tratamento cardiovascular ou alívio de sintomas.
 
